@@ -22,6 +22,7 @@ CapEdge is an all-in-one platform to maintain your stock trading records and gen
 **Description:** Authenticates a user with username and password credentials. Returns a JWT token that must be included in the Authorization header for all subsequent API requests. The token has an expiration time and should be validated periodically.
 
 **Business Logic:**
+
 - Validate username and password against the database
 - Generate a JWT token containing user information and expiration time
 - Return the token in the response
@@ -114,6 +115,7 @@ Authorization: Bearer <token>
 **Description:** Retrieves a list of all brokers or searches for specific brokers by name. Brokers represent brokerage firms through which users trade. This endpoint supports pagination and search functionality to handle large datasets efficiently.
 
 **Business Logic:**
+
 - Fetch brokers from the database with optional name filter
 - Apply pagination using limit and offset
 - Return brokers sorted by name or creation date

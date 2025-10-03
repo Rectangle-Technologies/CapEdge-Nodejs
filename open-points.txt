@@ -1,0 +1,19 @@
+[ ] - Suggestion: change endpoint /brokers -> /broker/get-all. Similarly for POST /broker/create, PUT /broker/update/:id, DELETE /broker/delete/:id for more clarity. Same for every CRUD
+[ ] - In get brokers, it's mentioned it should be sorted by name or creation date. I think it should be just name
+[ ] - In get brokers, inside data I feel there should be another field "brokers" which will be an array, instead of direct returning an array for better clarity. Same for every API that returns some data.
+[ ] - In creating and updating brokers, I think we should not keep min characters for fields like name, address given how the client is.
+[ ] - In creating brokers, should we check if same name also exists?
+[ ] - I think we should not allow the PAN to be updated. If they want to update PAN, they should delete the broker and add new since PAN doesn't change in real world. Same for user-account.
+[ ] - In get securities, 2nd point is Join with stock exchange table. We don't have any such table.
+[ ] - For Securities entered by them manually, do we keep the stockExchange block as empty?
+[ ] - For securities, is "id", "_id"? In fact for every model
+[ ] - While creating security, "stockExchangeId" shouldn't be mandatory.
+[ ] - While updating security, does it make sense to update its type?
+[ ] - Do we need to provide deleting a security?
+[ ] - Why is get stock exchange needed?
+[ ] - In get user accounts, 2nd point doesn't make sense. Also the sorting
+[ ] - Are we storing dematAccounts as an array in the user model, or we're just sending in the get user accounts API response?
+[ ] - Do we want to do hard delete user accounts with the restrictions, or just perform a soft delete?
+[ ] - Do we need an API to fetch all demat accounts? Shouldn't it be according to a user-account?
+[ ] - Do we need to update dematAccounts?
+[ ] - Transaction entry doesn't have FIFO calculation step for back-dated entries
