@@ -1,0 +1,37 @@
+[
+  {
+    "sr_no": 1,
+    "security_code": "RELIANCE",
+    "security_name": "Reliance Industries Ltd",
+    "type": "EQUITY",
+    "stockExchangeId": "REPLACE_WITH_YOUR_STOCK_EXCHANGE_ID"
+  },
+  {
+    "sr_no": 2,
+    "security_code": "TCS",
+    "security_name": "Tata Consultancy Services",
+    "type": "EQUITY",
+    "stockExchangeId": "REPLACE_WITH_YOUR_STOCK_EXCHANGE_ID"
+  },
+  {
+    "sr_no": 3,
+    "security_code": "INFY",
+    "security_name": "Infosys Limited",
+    "type": "EQUITY",
+    "stockExchangeId": "REPLACE_WITH_YOUR_STOCK_EXCHANGE_ID"
+  },
+  {
+    "sr_no": 3289,
+    "security_code": 2710,
+    "security_name": "ZYDEN GENTEC",
+    "type": "EQUITY",
+    "stockExchangeId": "REPLACE_WITH_YOUR_STOCK_EXCHANGE_ID"
+  },
+  {
+    "sr_no": 3290,
+    "security_code": 2711,
+    "security_name": "ZYDUS WELLNESS",
+    "type": "EQUITY",
+    "stockExchangeId": "REPLACE_WITH_YOUR_STOCK_EXCHANGE_ID"
+  }
+]

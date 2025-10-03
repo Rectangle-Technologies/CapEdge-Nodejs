@@ -1,0 +1,1415 @@
+{
+	"info": {
+		"_postman_id": "capedge-api-collection-v1",
+		"name": "CapEdge API Collection",
+		"description": "Complete API collection for CapEdge - Stock trading records and portfolio management platform for Indian stock market investors",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "capedge"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"    pm.test(\"Token saved to environment\", function () {",
+									"        pm.expect(jsonData.data.token).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticates a user and returns a JWT token. The token is automatically saved to environment variable 'auth_token' for use in subsequent requests."
+					},
+					"response": []
+				},
+				{
+					"name": "Validate Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/validate-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"validate-token"
+							]
+						},
+						"description": "Validates the current JWT token to check if it's still valid and not expired."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for login and token validation"
+		},
+		{
+			"name": "Brokers",
+			"item": [
+				{
+					"name": "Get All Brokers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/brokers?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"brokers"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "Zerodha",
+									"disabled": true,
+									"description": "Search by broker name"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Number of records to return"
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Number of records to skip"
+								}
+							]
+						},
+						"description": "Retrieves a list of all brokers with optional search and pagination"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Broker",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Zerodha\",\n  \"panNumber\": \"AAAAA0000A\",\n  \"address\": \"#153/154, 4th Cross, Dollars Colony, Opp. Clarence Public School, J.P Nagar 4th Phase, Bangalore - 560078, Karnataka\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/brokers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"brokers"
+							]
+						},
+						"description": "Creates a new broker entry with PAN validation"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Broker",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Zerodha Broking Ltd\",\n  \"panNumber\": \"AAAAA0000A\",\n  \"address\": \"#153/154, 4th Cross, Dollars Colony, Opp. Clarence Public School, J.P Nagar 4th Phase, Bangalore - 560078, Karnataka\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/brokers/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"brokers",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Broker ID"
+								}
+							]
+						},
+						"description": "Updates an existing broker's information"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Broker",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/brokers/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"brokers",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Broker ID"
+								}
+							]
+						},
+						"description": "Deletes a broker (only if no associated demat accounts exist)"
+					},
+					"response": []
+				}
+			],
+			"description": "Broker management endpoints for CRUD operations"
+		},
+		{
+			"name": "Securities",
+			"item": [
+				{
+					"name": "Get All Securities",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/securities?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"securities"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "Reliance",
+									"disabled": true,
+									"description": "Search by security name"
+								},
+								{
+									"key": "type",
+									"value": "EQUITY",
+									"disabled": true,
+									"description": "Filter by type: EQUITY, FUTURES, OPTIONS, COMMODITY, CURRENCY, BOND, ETF, MUTUAL_FUND"
+								},
+								{
+									"key": "exchangeId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by stock exchange ID"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Retrieves all securities with optional filtering by name, type, or exchange"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Equity Security",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Reliance Industries Ltd\",\n  \"type\": \"EQUITY\",\n  \"strikePrice\": null,\n  \"expiry\": null,\n  \"stockExchangeId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/securities",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"securities"
+							]
+						},
+						"description": "Creates a new equity security (no strike price or expiry required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Options Security",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"NIFTY 50 JAN 2026 CE 18000\",\n  \"type\": \"OPTIONS\",\n  \"strikePrice\": 18000.00,\n  \"expiry\": \"2026-01-25\",\n  \"stockExchangeId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/securities",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"securities"
+							]
+						},
+						"description": "Creates a new options security (requires strike price and expiry)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Security",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Reliance Industries Limited\",\n  \"type\": \"EQUITY\",\n  \"strikePrice\": null,\n  \"expiry\": null,\n  \"stockExchangeId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/securities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"securities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Security ID"
+								}
+							]
+						},
+						"description": "Updates an existing security's information"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Security",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/securities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"securities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Security ID"
+								}
+							]
+						},
+						"description": "Deletes a security (only if no associated transactions exist)"
+					},
+					"response": []
+				}
+			],
+			"description": "Securities management endpoints for stocks, options, futures, etc."
+		},
+		{
+			"name": "Stock Exchanges",
+			"item": [
+				{
+					"name": "Get All Stock Exchanges",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/stock-exchanges",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stock-exchanges"
+							]
+						},
+						"description": "Retrieves all available stock exchanges (NSE, BSE, etc.)"
+					},
+					"response": []
+				}
+			],
+			"description": "Stock exchange reference data endpoints"
+		},
+		{
+			"name": "User Accounts",
+			"item": [
+				{
+					"name": "Get All User Accounts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user-accounts?includeDematAccounts=true&limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user-accounts"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "John",
+									"disabled": true,
+									"description": "Search by user name"
+								},
+								{
+									"key": "includeDematAccounts",
+									"value": "true",
+									"description": "Include demat accounts in response"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Retrieves all user accounts with optional demat account details"
+					},
+					"response": []
+				},
+				{
+					"name": "Create User Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"address\": \"123 Main Street, Apartment 4B, Mumbai, Maharashtra 400001\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user-accounts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user-accounts"
+							]
+						},
+						"description": "Creates a new user account with PAN validation"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Account",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John David Doe\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"address\": \"123 Main Street, Apartment 4B, Mumbai, Maharashtra 400001\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/user-accounts/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user-accounts",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "User Account ID"
+								}
+							]
+						},
+						"description": "Updates an existing user account's information"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User Account",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user-accounts/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user-accounts",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "User Account ID"
+								}
+							]
+						},
+						"description": "Deletes a user account (only if no associated demat accounts or transactions exist)"
+					},
+					"response": []
+				}
+			],
+			"description": "User account management endpoints"
+		},
+		{
+			"name": "Demat Accounts",
+			"item": [
+				{
+					"name": "Get All Demat Accounts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/demat-accounts?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"demat-accounts"
+							],
+							"query": [
+								{
+									"key": "userAccountId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by user account ID"
+								},
+								{
+									"key": "brokerId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by broker ID"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Retrieves all demat accounts with user and broker details"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Demat Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userAccountId\": 1,\n  \"brokerId\": 1,\n  \"balance\": 100000.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/demat-accounts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"demat-accounts"
+							]
+						},
+						"description": "Creates a new demat account linking a user to a broker"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Demat Account",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userAccountId\": 1,\n  \"brokerId\": 1,\n  \"balance\": 150000.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/demat-accounts/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"demat-accounts",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Demat Account ID"
+								}
+							]
+						},
+						"description": "Updates an existing demat account"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Demat Account",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/demat-accounts/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"demat-accounts",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Demat Account ID"
+								}
+							]
+						},
+						"description": "Deletes a demat account (only if no associated transactions exist)"
+					},
+					"response": []
+				}
+			],
+			"description": "Demat account management endpoints"
+		},
+		{
+			"name": "Transactions",
+			"item": [
+				{
+					"name": "Get All Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/transactions?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2025-01-01",
+									"disabled": true,
+									"description": "Filter from date (YYYY-MM-DD)"
+								},
+								{
+									"key": "endDate",
+									"value": "2025-12-31",
+									"disabled": true,
+									"description": "Filter to date (YYYY-MM-DD)"
+								},
+								{
+									"key": "type",
+									"value": "BUY",
+									"disabled": true,
+									"description": "Filter by type: BUY or SELL"
+								},
+								{
+									"key": "securityId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by security ID"
+								},
+								{
+									"key": "dematAccountId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by demat account ID"
+								},
+								{
+									"key": "deliveryType",
+									"value": "Delivery",
+									"disabled": true,
+									"description": "Filter by delivery type: Delivery or Intraday"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Retrieves all transactions with comprehensive filtering options"
+					},
+					"response": []
+				},
+				{
+					"name": "Create BUY Transaction",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"2025-10-01\",\n  \"type\": \"BUY\",\n  \"quantity\": 100,\n  \"price\": 2450.50,\n  \"securityId\": 1,\n  \"deliveryType\": \"Delivery\",\n  \"referenceNumber\": \"REF001\",\n  \"dematAccountId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/transactions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions"
+							]
+						},
+						"description": "Creates a new BUY transaction (creates ledger entry and unmatched record)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create SELL Transaction",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"2025-10-02\",\n  \"type\": \"SELL\",\n  \"quantity\": 50,\n  \"price\": 2890.75,\n  \"securityId\": 1,\n  \"deliveryType\": \"Delivery\",\n  \"referenceNumber\": \"REF002\",\n  \"dematAccountId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/transactions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions"
+							]
+						},
+						"description": "Creates a new SELL transaction (triggers FIFO matching with BUY transactions)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Transaction",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"2025-10-01\",\n  \"type\": \"BUY\",\n  \"quantity\": 150,\n  \"price\": 2450.50,\n  \"securityId\": 1,\n  \"deliveryType\": \"Delivery\",\n  \"referenceNumber\": \"REF001-UPDATED\",\n  \"dematAccountId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/transactions/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "TXN001",
+									"description": "Transaction ID"
+								}
+							]
+						},
+						"description": "Updates an existing transaction (recalculates matches if needed)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Transaction",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/transactions/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "TXN001",
+									"description": "Transaction ID"
+								}
+							]
+						},
+						"description": "Deletes a transaction (may be restricted if part of matched records)"
+					},
+					"response": []
+				}
+			],
+			"description": "Transaction management endpoints with FIFO matching"
+		},
+		{
+			"name": "Reports",
+			"item": [
+				{
+					"name": "P&L Report",
+					"item": [
+						{
+							"name": "Get P&L Report",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/pnl?limit=50&offset=0",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"pnl"
+									],
+									"query": [
+										{
+											"key": "startDate",
+											"value": "2025-01-01",
+											"disabled": true,
+											"description": "Filter from sell date (YYYY-MM-DD)"
+										},
+										{
+											"key": "endDate",
+											"value": "2025-12-31",
+											"disabled": true,
+											"description": "Filter to sell date (YYYY-MM-DD)"
+										},
+										{
+											"key": "capitalGainType",
+											"value": "STCG",
+											"disabled": true,
+											"description": "Filter by type: STCG or LTCG"
+										},
+										{
+											"key": "dematAccountId",
+											"value": "1",
+											"disabled": true,
+											"description": "Filter by demat account ID"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										},
+										{
+											"key": "offset",
+											"value": "0"
+										}
+									]
+								},
+								"description": "Retrieves realized P&L from matched buy-sell transactions with STCG/LTCG classification"
+							},
+							"response": []
+						},
+						{
+							"name": "Export P&L Report (CSV)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/pnl/export?format=csv",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"pnl",
+										"export"
+									],
+									"query": [
+										{
+											"key": "format",
+											"value": "csv",
+											"description": "Export format: csv or excel"
+										},
+										{
+											"key": "startDate",
+											"value": "2025-01-01",
+											"disabled": true
+										},
+										{
+											"key": "endDate",
+											"value": "2025-12-31",
+											"disabled": true
+										},
+										{
+											"key": "capitalGainType",
+											"value": "STCG",
+											"disabled": true
+										},
+										{
+											"key": "dematAccountId",
+											"value": "1",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Exports P&L report to CSV format"
+							},
+							"response": []
+						},
+						{
+							"name": "Export P&L Report (Excel)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/pnl/export?format=excel",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"pnl",
+										"export"
+									],
+									"query": [
+										{
+											"key": "format",
+											"value": "excel",
+											"description": "Export format: csv or excel"
+										},
+										{
+											"key": "startDate",
+											"value": "2025-01-01",
+											"disabled": true
+										},
+										{
+											"key": "endDate",
+											"value": "2025-12-31",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Exports P&L report to Excel format with professional formatting"
+							},
+							"response": []
+						}
+					],
+					"description": "Profit & Loss report endpoints"
+				},
+				{
+					"name": "Holdings Report",
+					"item": [
+						{
+							"name": "Get Holdings Report",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/holdings?limit=50&offset=0",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"holdings"
+									],
+									"query": [
+										{
+											"key": "securityName",
+											"value": "Reliance",
+											"disabled": true,
+											"description": "Search by security name"
+										},
+										{
+											"key": "securityType",
+											"value": "EQUITY",
+											"disabled": true,
+											"description": "Filter by security type"
+										},
+										{
+											"key": "dematAccountId",
+											"value": "1",
+											"disabled": true,
+											"description": "Filter by demat account ID"
+										},
+										{
+											"key": "limit",
+											"value": "50"
+										},
+										{
+											"key": "offset",
+											"value": "0"
+										}
+									]
+								},
+								"description": "Retrieves current holdings (open positions) with unrealized P&L"
+							},
+							"response": []
+						},
+						{
+							"name": "Export Holdings Report (CSV)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/holdings/export?format=csv",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"holdings",
+										"export"
+									],
+									"query": [
+										{
+											"key": "format",
+											"value": "csv",
+											"description": "Export format: csv or excel"
+										},
+										{
+											"key": "securityName",
+											"value": "Reliance",
+											"disabled": true
+										},
+										{
+											"key": "securityType",
+											"value": "EQUITY",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Exports holdings report to CSV format"
+							},
+							"response": []
+						},
+						{
+							"name": "Export Holdings Report (Excel)",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/reports/holdings/export?format=excel",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"reports",
+										"holdings",
+										"export"
+									],
+									"query": [
+										{
+											"key": "format",
+											"value": "excel",
+											"description": "Export format: csv or excel"
+										}
+									]
+								},
+								"description": "Exports holdings report to Excel format with professional formatting"
+							},
+							"response": []
+						}
+					],
+					"description": "Holdings report endpoints"
+				}
+			],
+			"description": "Report generation endpoints for P&L and Holdings"
+		},
+		{
+			"name": "Ledger",
+			"item": [
+				{
+					"name": "Get Ledger Entries",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/ledger?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ledger"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2025-01-01",
+									"disabled": true,
+									"description": "Filter from date (YYYY-MM-DD)"
+								},
+								{
+									"key": "endDate",
+									"value": "2025-12-31",
+									"disabled": true,
+									"description": "Filter to date (YYYY-MM-DD)"
+								},
+								{
+									"key": "dematAccountId",
+									"value": "1",
+									"disabled": true,
+									"description": "Filter by demat account ID"
+								},
+								{
+									"key": "transactionType",
+									"value": "BUY",
+									"disabled": true,
+									"description": "Filter by transaction type: BUY, SELL, CREDIT, DEBIT"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Retrieves ledger entries showing all cash flow transactions with running balance"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Ledger (CSV)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/ledger/export?format=csv",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ledger",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "csv",
+									"description": "Export format: csv or excel"
+								},
+								{
+									"key": "startDate",
+									"value": "2025-01-01",
+									"disabled": true
+								},
+								{
+									"key": "endDate",
+									"value": "2025-12-31",
+									"disabled": true
+								},
+								{
+									"key": "dematAccountId",
+									"value": "1",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Exports ledger to CSV format"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Ledger (Excel)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/ledger/export?format=excel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"ledger",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "excel",
+									"description": "Export format: csv or excel"
+								},
+								{
+									"key": "startDate",
+									"value": "2025-01-01",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Exports ledger to Excel format with professional formatting"
+					},
+					"response": []
+				}
+			],
+			"description": "Ledger entries showing cash flow transactions"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:4000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

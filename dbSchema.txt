@@ -1,0 +1,92 @@
+Table Broker {
+  id integer [primary key]
+  name str
+  address str
+  panNumber str
+}
+
+Table DematAccount {
+  id integer [primary key]
+  userAccountId str
+  brokerId str
+  balance int
+}
+
+Table UserAccount {
+  id integer [primary key]
+  name str
+  panNumber str
+  address str
+}
+
+Table Security {
+  id integer [primary key]
+  name str
+  type enum
+  strikePrice int
+  expiry date
+  stockExchangeId int
+}
+
+Table Transaction {
+  id integer [primary key]
+  date date
+  type str
+  quantity int
+  price int
+  securityId str
+  deliveryType str
+  referenceNumber str
+  dematAccountId str
+}
+
+Table MatchedRecords {
+  buyDate date
+  sellDate date
+  securityId Id
+  qty int
+  buyTransactionId str
+  sellTransactionId str
+  capitalGainType enum
+  profitAndLoss int
+  deliveryType str
+}
+
+// UnMatchedRecords == Current Holdings
+Table UnMatchedRecords {
+  buyDate date
+  qty int
+  price int
+  securityId Id
+  buyTransactionId str
+}
+
+Table FinancialYear {
+  STCGrate int
+  LTCGrate int
+  startDate date
+  lastDate date
+  title str
+}
+
+Table LedgerEntry {
+  id integer
+  dematAccountId int
+  tradeTransactionId int
+  transactionAmount int
+  date date
+}
+
+Ref account_holder: DematAccount.userAccountId > UserAccount.id
+Ref demat_broker: DematAccount.brokerId > Broker.id
+Ref transaction_security: Transaction.securityId > Security.id
+Ref transaction_security_matched: MatchedRecords.securityId > Security.id
+Ref transaction_security_unmatched: UnMatchedRecords.securityId > Security.id
+Ref transaction_demat: Transaction.dematAccountId > DematAccount.id
+Ref matched_buy_txn: MatchedRecords.buyTransactionId > Transaction.id
+Ref matched_sell_txn: MatchedRecords.sellTransactionId > Transaction.id
+Ref unmatched_buy_txn: UnMatchedRecords.buyTransactionId > Transaction.id
+Ref ledger_demat: LedgerEntry.dematAccountId > DematAccount.id
+Ref trans_id: LedgerEntry.tradeTransactionId > Transaction.id
+
+https://dbdiagram.io/d
