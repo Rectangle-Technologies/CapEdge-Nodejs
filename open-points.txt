@@ -17,3 +17,6 @@
 [ ] - Do we need an API to fetch all demat accounts? Shouldn't it be according to a user-account?
 [ ] - Do we need to update dematAccounts?
 [ ] - Transaction entry doesn't have FIFO calculation step for back-dated entries
+[ ] - In get ledger, why is dematAccountId optional? Shouldn't it be a URL parameter?
+[ ] - Who will create a financial year?
+[ ] - In sample data of get financial years I see that the lastDate has a time. Just make sure that there is no time in any date field.
