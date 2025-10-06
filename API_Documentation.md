@@ -413,29 +413,6 @@ Content-Type: application/json
 
 ---
 
-### PUT /securities/:id
-
-**Description:** Updates an existing security's information. All validation rules from POST apply. Changing the security type requires appropriate changes to strike price and expiry fields.
-
-**Business Logic:**
-- Validate security ID exists
-- Apply same validation rules as POST
-- Update security record with new timestamp
-- Return updated security with exchange details
-
-**Headers:**
-
-```http
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Request Body:** Same as POST
-
-**Response (200):** Same structure as POST with updated timestamps
-
----
-
 ### DELETE /securities/:id
 
 **Description:** Deletes a security from the system. This operation is only allowed if the security has no associated transactions. This prevents data inconsistency and maintains historical transaction integrity.
@@ -686,7 +663,7 @@ Authorization: Bearer <token>
 **Description:** Retrieves demat accounts with optional filtering by user or broker. Demat accounts link users to brokers and maintain trading balances. Each account includes references to the user and broker for complete context.
 
 **Business Logic:**
-- Fetch demat accounts with optional filters
+- Fetch demat accounts with filters. Either one of userAccountId or brokerId should be present in query parameter
 - Join with user accounts and brokers tables
 - Apply pagination
 - Return demat accounts with nested user and broker details
@@ -792,30 +769,6 @@ Content-Type: application/json
   "message": "Demat account created successfully"
 }
 ```
-
----
-
-### PUT /demat-accounts/:id
-
-**Description:** Updates an existing demat account. All fields are required. Balance updates should typically be done through transactions, but this endpoint allows direct balance corrections.
-
-**Business Logic:**
-- Validate demat account ID exists
-- Validate all required fields
-- Validate user account and broker exist
-- Update demat account record with new timestamp
-- Return updated account with user and broker details
-
-**Headers:**
-
-```http
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Request Body:** Same as POST
-
-**Response (200):** Same structure as POST with updated timestamps
 
 ---
 
@@ -1483,9 +1436,9 @@ Authorization: Bearer <token>
 
 ---
 
-### POST /financial-years
+### PUT /financial-years/update/:id
 
-**Description:** Creates a new financial year configuration with tax rates. This allows the system to adapt to changing tax regulations over time. Each financial year must have non-overlapping date ranges.
+**Description:** Updates a financial year configuration with tax rates. This allows the system to adapt to changing tax regulations over time. Each financial year must have non-overlapping date ranges.
 
 **Business Logic:**
 - Validate all required fields
