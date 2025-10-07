@@ -23,14 +23,11 @@ const loginValidation = [
   body('username')
     .notEmpty()
     .withMessage('Username is required')
-    .trim()
-    .isLength({ min: 3, max: 50 })
-    .withMessage('Username must be between 3 and 50 characters'),
+    .trim(),
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long')
+    .trim()
 ];
 
 // Routes

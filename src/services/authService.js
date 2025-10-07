@@ -1,7 +1,6 @@
 const User = require('../models/User');
-const jwt = require('jsonwebtoken');
+const { sign } = require('@coconut-packages/jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const logger = require('../utils/logger');
 
 /**
  * Auth Service
@@ -23,47 +22,39 @@ const login = async (credentials) => {
     if (!user) {
       const error = new Error('Invalid credentials');
       error.statusCode = 401;
+      error.reasonCode = 'INVALID_CREDENTIALS';
       throw error;
     }
 
     // Verify password
-    // console.log('Comparing passwords:', { entered: password, stored: user.password });
-    // const hashedPassword = await bcrypt.hash(password, 10);
-    // console.log('Hashed entered password:', hashedPassword);
-
     const isPasswordValid = await bcrypt.compare(password, user.password);
     
     if (!isPasswordValid) {
       const error = new Error('Invalid credentials');
       error.statusCode = 401;
+      error.reasonCode = 'INVALID_CREDENTIALS';
       throw error;
     }
 
     // Generate JWT token
-    const token = jwt.sign(
+    const token = sign(
       { 
-        userId: user._id,
-        username: user.username,
-        email: user.email
+        userId: user._id
       },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      process.env.JWT_ENCRYPTION_KEY, process.env.JWT_SECRET, process.env.JWT_ENCRYPTION_IV, process.env.TOKEN_EXPIRE_TIME
     );
-
-    logger.info(`User logged in: ${user.username}`);
 
     // Return token and user info (without password)
     return {
       token,
       user: {
-        id: user._id,
+        _id: user._id,
         username: user.username,
         email: user.email,
         fullName: user.fullName
       }
     };
   } catch (error) {
-    logger.error('Error in login service:', error);
     throw error;
   }
 };
@@ -75,27 +66,8 @@ const login = async (credentials) => {
  */
 const validateToken = async (token) => {
   try {
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    
-    // Check if user still exists
-    const user = await User.findById(decoded.userId);
-    
-    if (!user) {
-      return {
-        valid: false,
-        message: 'User not found'
-      };
-    }
-
     return {
-      valid: true,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        fullName: user.fullName
-      }
+      valid: true
     };
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -109,8 +81,7 @@ const validateToken = async (token) => {
         message: 'Invalid token'
       };
     }
-    
-    logger.error('Error in validateToken service:', error);
+
     throw error;
   }
 };
@@ -155,17 +126,15 @@ const register = async (userData) => {
     });
 
     await user.save();
-    logger.info(`User registered: ${user.username}`);
 
     // Return user without password
     return {
-      id: user._id,
+      _id: user._id,
       username: user.username,
       email: user.email,
       fullName: user.fullName
     };
   } catch (error) {
-    logger.error('Error in register service:', error);
     throw error;
   }
 };
@@ -204,9 +173,7 @@ const changePassword = async (userId, passwordData) => {
     user.password = hashedPassword;
     await user.save();
 
-    logger.info(`Password changed for user: ${user.username}`);
   } catch (error) {
-    logger.error('Error in changePassword service:', error);
     throw error;
   }
 };

@@ -1,46 +1,53 @@
-const jwt = require('jsonwebtoken');
+const decode = require('@coconut-packages/jsonwebtoken/decode');
 const User = require('../models/User');
 
+// Helper function to create auth errors
+const createAuthError = (message, reasonCode = 'UNAUTHORIZED') => {
+  const error = new Error(message);
+  error.statusCode = 401;
+  error.reasonCode = reasonCode;
+  return error;
+};
+
+// TODO: Change the message to generic message once development is done
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authHeader = req.get('Authorization');
 
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access denied. No token provided.'
-      });
+    if (!authHeader) {
+      return next(createAuthError('No token provided'));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Optional: Check if user still exists
-    const user = await User.findById(decoded.userId).select('-password');
+    // Extract Bearer token
+    const [scheme, token] = authHeader.split(' ');
+    if (scheme !== 'Bearer' || !token) {
+      return next(createAuthError('Invalid token format'));
+    }
+
+    const decodedToken = decode(token, process.env.JWT_ENCRYPTION_KEY, process.env.JWT_SECRET, process.env.JWT_ENCRYPTION_IV);
+    if (!decodedToken) {
+      return next(createAuthError('Invalid token'));
+    }
+
+    // Check if user still exists
+    const user = await User.findById(decodedToken.userId).select('-password');
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Token is not valid. User not found.'
-      });
+      return next(createAuthError('User not found'));
     }
 
-    req.user = {
-      userId: decoded.userId,
-      username: decoded.username
-    };
-
+    req.user = user;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired'
-      });
+      error.message = 'Token expired';
+      error.statusCode = 401;
+      error.reasonCode = 'TOKEN_EXPIRED';
+    } else {
+      error.message = 'Internal server error';
+      error.statusCode = 500;
+      error.reasonCode = 'INTERNAL_SERVER_ERROR';
     }
-    
-    return res.status(401).json({
-      success: false,
-      message: 'Token is not valid'
-    });
+    next(error);
   }
 };
 
