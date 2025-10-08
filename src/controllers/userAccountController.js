@@ -31,10 +31,12 @@ const createUserAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        errors: errors.array()
-      });
+      throw {
+        statusCode: 422,
+        message: errors.array()[0].msg,
+        reasonCode: 'BAD_REQUEST',
+        field: errors.array()[0].path
+      };
     }
 
     const userAccount = await userAccountService.createUserAccount(req.body);

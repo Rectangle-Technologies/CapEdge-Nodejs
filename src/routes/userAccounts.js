@@ -9,9 +9,7 @@ const userAccountValidation = [
   body('name')
     .notEmpty()
     .withMessage('User account name is required')
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Name must be between 2 and 100 characters'),
+    .trim(),
   body('panNumber')
     .notEmpty()
     .withMessage('PAN number is required')
@@ -22,16 +20,6 @@ const userAccountValidation = [
     .notEmpty()
     .withMessage('Address is required')
     .trim()
-    .isLength({ min: 10, max: 500 })
-    .withMessage('Address must be between 10 and 500 characters'),
-  body('email')
-    .optional()
-    .isEmail()
-    .withMessage('Invalid email format'),
-  body('phone')
-    .optional()
-    .matches(/^[6-9]\d{9}$/)
-    .withMessage('Invalid phone number format')
 ];
 
 const idValidation = [
