@@ -152,33 +152,19 @@ const createUserAccount = async (userData) => {
  * @returns {Promise<Object>} - Updated user account
  */
 const updateUserAccount = async (userAccountId, updateData) => {
-  const { name, panNumber, address } = updateData;
+  const { name, address } = updateData;
 
   // Check if user account exists
   const userAccount = await UserAccount.findById(userAccountId);
   if (!userAccount) {
     const error = new Error('User account not found');
     error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
     throw error;
-  }
-
-  // Check if PAN is being changed and if it's unique
-  if (panNumber && panNumber.toUpperCase() !== userAccount.panNumber) {
-    const existingUser = await UserAccount.findOne({ 
-      panNumber: panNumber.toUpperCase(),
-      _id: { $ne: userAccountId }
-    });
-    
-    if (existingUser) {
-      const error = new Error('Another user account with this PAN number already exists');
-      error.statusCode = 400;
-      throw error;
-    }
   }
 
   // Update user account
   userAccount.name = name;
-  userAccount.panNumber = panNumber.toUpperCase();
   userAccount.address = address;
 
   await userAccount.save();
