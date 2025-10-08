@@ -7,8 +7,8 @@ const getDematAccounts = async (req, res, next) => {
     const filters = {
       userAccountId: req.query.userAccountId,
       brokerId: req.query.brokerId,
-      limit: req.query.limit,
-      offset: req.query.offset
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await dematAccountService.getDematAccounts(filters);

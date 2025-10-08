@@ -21,17 +21,6 @@ const userAccountSchema = new mongoose.Schema({
     trim: true,
     minlength: [10, 'Address must be at least 10 characters long'],
     maxlength: [500, 'Address cannot exceed 500 characters']
-  },
-  email: {
-    type: String,
-    trim: true,
-    lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
-  },
-  phone: {
-    type: String,
-    trim: true,
-    match: [/^[6-9]\d{9}$/, 'Please enter a valid 10-digit mobile number']
   }
 }, {
   timestamps: true

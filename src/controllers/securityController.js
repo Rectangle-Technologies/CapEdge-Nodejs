@@ -8,8 +8,8 @@ const getSecurities = async (req, res, next) => {
       name: req.query.name,
       type: req.query.type,
       exchangeId: req.query.exchangeId,
-      limit: req.query.limit,
-      offset: req.query.offset
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await securityService.getSecurities(filters);

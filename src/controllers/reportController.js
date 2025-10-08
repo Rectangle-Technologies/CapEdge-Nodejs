@@ -10,8 +10,8 @@ const getPnLReport = async (req, res, next) => {
       endDate: req.query.endDate,
       capitalGainType: req.query.capitalGainType,
       dematAccountId: req.query.dematAccountId,
-      limit: req.query.limit,
-      offset: req.query.offset
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await reportService.getPnLRecords(filters);
@@ -69,8 +69,8 @@ const getHoldingsReport = async (req, res, next) => {
       securityName: req.query.securityName,
       securityType: req.query.securityType,
       dematAccountId: req.query.dematAccountId,
-      limit: req.query.limit,
-      offset: req.query.offset
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await reportService.getHoldings(filters);

@@ -8,9 +8,11 @@ const logger = require('../utils/logger');
  */
 const getBrokers = async (req, res, next) => {
   try {
-    const { name, limit, offset } = req.query;
-    
-    const result = await brokerService.getBrokers({ name, limit, offset });
+    const result = await brokerService.getBrokers({ 
+      name: req.query.name, 
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
+    });
     
     res.json({
       success: true,

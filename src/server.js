@@ -15,7 +15,6 @@ const authMiddleware = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const brokerRoutes = require('./routes/brokers');
 const securityRoutes = require('./routes/securities');
-const stockExchangeRoutes = require('./routes/stockExchanges');
 const userAccountRoutes = require('./routes/userAccounts');
 const dematAccountRoutes = require('./routes/dematAccounts');
 const transactionRoutes = require('./routes/transactions');
@@ -72,13 +71,12 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes);
 
 // Protected routes (require authentication)
-app.use('/brokers', authMiddleware, brokerRoutes);
-app.use('/securities', authMiddleware, securityRoutes);
-app.use('/stock-exchanges', authMiddleware, stockExchangeRoutes);
-app.use('/user-accounts', authMiddleware, userAccountRoutes);
-app.use('/demat-accounts', authMiddleware, dematAccountRoutes);
-app.use('/transactions', authMiddleware, transactionRoutes);
-app.use('/reports', authMiddleware, reportRoutes);
+app.use('/broker', authMiddleware, brokerRoutes);
+app.use('/security', authMiddleware, securityRoutes);
+app.use('/user-account', authMiddleware, userAccountRoutes);
+app.use('/demat-account', authMiddleware, dematAccountRoutes);
+app.use('/transaction', authMiddleware, transactionRoutes);
+app.use('/report', authMiddleware, reportRoutes);
 app.use('/ledger', authMiddleware, ledgerRoutes);
 
 // 404 handler

@@ -10,8 +10,8 @@ const getLedgerEntries = async (req, res, next) => {
       endDate: req.query.endDate,
       dematAccountId: req.query.dematAccountId,
       transactionType: req.query.transactionType,
-      limit: req.query.limit,
-      offset: req.query.offset
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await ledgerService.getLedgerEntries(filters);

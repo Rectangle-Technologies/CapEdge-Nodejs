@@ -1,14 +1,18 @@
 const { validationResult } = require('express-validator');
 const userAccountService = require('../services/userAccountService');
-const logger = require('../utils/logger');
 
 const getUserAccounts = async (req, res, next) => {
   try {
+    // Process name for partial search (trim and normalize whitespace)
+    const processedName = req.query.name 
+      ? req.query.name.trim().replace(/\s+/g, ' ')
+      : undefined;
+
     const filters = {
-      name: req.query.name,
-      includeDematAccounts: req.query.includeDematAccounts !== 'false',
-      limit: req.query.limit,
-      offset: req.query.offset
+      name: processedName,
+      includeDematAccounts: req.query.includeDematAccounts === 'true',
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
     
     const result = await userAccountService.getUserAccounts(filters);

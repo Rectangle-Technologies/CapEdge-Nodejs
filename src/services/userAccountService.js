@@ -15,11 +15,15 @@ const logger = require('../utils/logger');
  */
 const getUserAccounts = async (filters = {}) => {
   try {
-    const { name, includeDematAccounts = true, limit = 50, offset = 0 } = filters;
+    const { name, includeDematAccounts, limit = 50, pageNo = 1 } = filters;
+
+    // Calculate offset from pageNo and limit
+    const offset = (pageNo - 1) * limit;
     
     // Build query
     const query = {};
     if (name) {
+      // Since name is already processed (lowercase, trimmed), we can use it directly for partial matching
       query.name = { $regex: name, $options: 'i' };
     }
 
@@ -73,7 +77,7 @@ const getUserAccounts = async (filters = {}) => {
           }
         },
         { $project: { brokers: 0 } },
-        { $sort: { createdAt: -1 } },
+        { $sort: { name: 1 } },
         { $skip: parseInt(offset) },
         { $limit: parseInt(limit) }
       ];
@@ -87,7 +91,7 @@ const getUserAccounts = async (filters = {}) => {
           total,
           count: userAccounts.length,
           limit: parseInt(limit),
-          offset: parseInt(offset)
+          pageNo: parseInt(pageNo)
         }
       };
     } else {
@@ -105,7 +109,7 @@ const getUserAccounts = async (filters = {}) => {
           total,
           count: userAccounts.length,
           limit: parseInt(limit),
-          offset: parseInt(offset)
+          pageNo: parseInt(pageNo)
         }
       };
     }

@@ -10,10 +10,10 @@ const reportQueryValidation = [
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage('Limit must be between 1 and 100'),
-  query('offset')
+  query('pageNo')
     .optional()
-    .isInt({ min: 0 })
-    .withMessage('Offset must be a non-negative integer'),
+    .isInt({ min: 1 })
+    .withMessage('Page number must be a positive integer'),
   query('startDate')
     .optional()
     .isISO8601()

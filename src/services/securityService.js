@@ -1,6 +1,5 @@
 const Security = require('../models/Security');
 const Transaction = require('../models/Transaction');
-const StockExchange = require('../models/StockExchange');
 const logger = require('../utils/logger');
 
 /**
@@ -10,12 +9,15 @@ const logger = require('../utils/logger');
 
 /**
  * Get all securities with optional filters and pagination
- * @param {Object} filters - { name, type, exchangeId, limit, offset }
+ * @param {Object} filters - { name, type, exchangeId, limit, pageNo }
  * @returns {Promise<Object>} - { securities, pagination }
  */
 const getSecurities = async (filters = {}) => {
   try {
-    const { name, type, exchangeId, limit = 50, offset = 0 } = filters;
+    const { name, type, exchangeId, limit = 50, pageNo = 1 } = filters;
+    
+    // Calculate offset from pageNo and limit
+    const offset = (pageNo - 1) * limit;
     
     // Build query
     const query = {};
@@ -45,7 +47,7 @@ const getSecurities = async (filters = {}) => {
         total,
         count: securities.length,
         limit: parseInt(limit),
-        offset: parseInt(offset)
+        pageNo: parseInt(pageNo)
       }
     };
   } catch (error) {
@@ -160,14 +162,6 @@ const updateSecurity = async (securityId, updateData) => {
     const security = await Security.findById(securityId);
     if (!security) {
       const error = new Error('Security not found');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // Validate stock exchange exists
-    const exchange = await StockExchange.findById(stockExchangeId);
-    if (!exchange) {
-      const error = new Error('Stock exchange not found');
       error.statusCode = 404;
       throw error;
     }

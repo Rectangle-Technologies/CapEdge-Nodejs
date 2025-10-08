@@ -9,12 +9,15 @@ const logger = require('../utils/logger');
 
 /**
  * Get all brokers with optional search and pagination
- * @param {Object} filters - { name, limit, offset }
+ * @param {Object} filters - { name, limit, pageNo }
  * @returns {Promise<Object>} - { brokers, pagination }
  */
 const getBrokers = async (filters = {}) => {
   try {
-    const { name, limit = 50, offset = 0 } = filters;
+    const { name, limit = 50, pageNo = 1 } = filters;
+    
+    // Calculate offset from pageNo and limit
+    const offset = (pageNo - 1) * limit;
     
     // Build query
     const query = {};
@@ -38,7 +41,7 @@ const getBrokers = async (filters = {}) => {
         total,
         count: brokers.length,
         limit: parseInt(limit),
-        offset: parseInt(offset)
+        pageNo: parseInt(pageNo)
       }
     };
   } catch (error) {
