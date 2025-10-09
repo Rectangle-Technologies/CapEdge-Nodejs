@@ -9,9 +9,7 @@ const brokerValidation = [
   body('name')
     .notEmpty()
     .withMessage('Broker name is required')
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Broker name must be between 2 and 100 characters'),
+    .trim(),
   body('panNumber')
     .notEmpty()
     .withMessage('PAN number is required')
@@ -22,8 +20,6 @@ const brokerValidation = [
     .notEmpty()
     .withMessage('Address is required')
     .trim()
-    .isLength({ min: 10, max: 500 })
-    .withMessage('Address must be between 10 and 500 characters')
 ];
 
 const idValidation = [
@@ -44,9 +40,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/', queryValidation, brokerController.getBrokers);
-router.post('/', brokerValidation, brokerController.createBroker);
-router.put('/:id', idValidation, brokerValidation, brokerController.updateBroker);
-router.delete('/:id', idValidation, brokerController.deleteBroker);
+router.get('/get-all', queryValidation, brokerController.getBrokers);
+router.post('/create', brokerValidation, brokerController.createBroker);
+router.put('/update/:id', idValidation, brokerValidation, brokerController.updateBroker);
+router.delete('/delete/:id', idValidation, brokerController.deleteBroker);
 
 module.exports = router;

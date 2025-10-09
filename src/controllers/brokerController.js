@@ -10,7 +10,7 @@ const getBrokers = async (req, res, next) => {
   try {
     const result = await brokerService.getBrokers({ 
       name: req.query.name, 
-      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit) : 50,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     });
     
@@ -32,11 +32,12 @@ const createBroker = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        message: 'Validation errors',
-        errors: errors.array()
-      });
+      throw {
+        statusCode: 422,
+        message: errors.array()[0].msg,
+        reasonCode: 'BAD_REQUEST',
+        field: errors.array()[0].path
+      };
     }
 
     const broker = await brokerService.createBroker(req.body);
@@ -59,11 +60,12 @@ const updateBroker = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        message: 'Validation errors',
-        errors: errors.array()
-      });
+      throw {
+        statusCode: 422,
+        message: errors.array()[0].msg,
+        reasonCode: 'BAD_REQUEST',
+        field: errors.array()[0].path
+      };
     }
 
     const broker = await brokerService.updateBroker(req.params.id, req.body);

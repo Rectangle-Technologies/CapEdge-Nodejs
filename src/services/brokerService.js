@@ -1,6 +1,5 @@
 const Broker = require('../models/Broker');
 const DematAccount = require('../models/DematAccount');
-const logger = require('../utils/logger');
 
 /**
  * Broker Service
@@ -13,41 +12,36 @@ const logger = require('../utils/logger');
  * @returns {Promise<Object>} - { brokers, pagination }
  */
 const getBrokers = async (filters = {}) => {
-  try {
-    const { name, limit = 50, pageNo = 1 } = filters;
-    
-    // Calculate offset from pageNo and limit
-    const offset = (pageNo - 1) * limit;
-    
-    // Build query
-    const query = {};
-    if (name) {
-      query.name = { $regex: name, $options: 'i' }; // Case-insensitive search
-    }
-
-    // Get total count for pagination
-    const total = await Broker.countDocuments(query);
-
-    // Fetch brokers with pagination
-    const brokers = await Broker.find(query)
-      .sort({ name: 1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(offset))
-      .lean();
-
-    return {
-      brokers,
-      pagination: {
-        total,
-        count: brokers.length,
-        limit: parseInt(limit),
-        pageNo: parseInt(pageNo)
-      }
-    };
-  } catch (error) {
-    logger.error('Error in getBrokers service:', error);
-    throw error;
+  const { name, limit = 50, pageNo = 1 } = filters;
+  
+  // Calculate offset from pageNo and limit
+  const offset = (pageNo - 1) * limit;
+  
+  // Build query
+  const query = {};
+  if (name) {
+    query.name = { $regex: name, $options: 'i' }; // Case-insensitive search
   }
+
+  // Get total count for pagination
+  const total = await Broker.countDocuments(query);
+
+  // Fetch brokers with pagination
+  const brokers = await Broker.find(query)
+    .sort({ name: 1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(offset))
+    .lean();
+
+  return {
+    brokers,
+    pagination: {
+      total,
+      count: brokers.length,
+      limit: parseInt(limit),
+      pageNo: parseInt(pageNo)
+    }
+  };
 };
 
 /**
@@ -56,35 +50,30 @@ const getBrokers = async (filters = {}) => {
  * @returns {Promise<Object>} - Created broker
  */
 const createBroker = async (brokerData) => {
-  try {
-    const { name, panNumber, address } = brokerData;
+  const { name, panNumber, address } = brokerData;
 
-    // Check if PAN already exists
-    const existingBroker = await Broker.findOne({ 
-      panNumber: panNumber.toUpperCase() 
-    });
-    
-    if (existingBroker) {
-      const error = new Error('Broker with this PAN number already exists');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Create broker
-    const broker = new Broker({
-      name,
-      panNumber: panNumber.toUpperCase(),
-      address
-    });
-
-    await broker.save();
-    logger.info(`Broker created: ${broker._id}`);
-
-    return broker;
-  } catch (error) {
-    logger.error('Error in createBroker service:', error);
+  // Check if PAN already exists
+  const existingBroker = await Broker.findOne({ 
+    panNumber: panNumber.toUpperCase() 
+  });
+  
+  if (existingBroker) {
+    const error = new Error('Broker with this PAN number already exists');
+    error.statusCode = 400;
+    error.reasonCode = 'ALREADY_EXISTS';
     throw error;
   }
+
+  // Create broker
+  const broker = new Broker({
+    name,
+    panNumber: panNumber.toUpperCase(),
+    address
+  });
+
+  await broker.save();
+
+  return broker;
 };
 
 /**
@@ -94,44 +83,24 @@ const createBroker = async (brokerData) => {
  * @returns {Promise<Object>} - Updated broker
  */
 const updateBroker = async (brokerId, updateData) => {
-  try {
-    const { name, panNumber, address } = updateData;
+  const { name, address } = updateData;
 
-    // Check if broker exists
-    const broker = await Broker.findById(brokerId);
-    if (!broker) {
-      const error = new Error('Broker not found');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // Check if PAN is being changed and if it's unique
-    if (panNumber && panNumber.toUpperCase() !== broker.panNumber) {
-      const existingBroker = await Broker.findOne({ 
-        panNumber: panNumber.toUpperCase(),
-        _id: { $ne: brokerId }
-      });
-      
-      if (existingBroker) {
-        const error = new Error('Another broker with this PAN number already exists');
-        error.statusCode = 400;
-        throw error;
-      }
-    }
-
-    // Update broker
-    broker.name = name;
-    broker.panNumber = panNumber.toUpperCase();
-    broker.address = address;
-
-    await broker.save();
-    logger.info(`Broker updated: ${broker._id}`);
-
-    return broker;
-  } catch (error) {
-    logger.error('Error in updateBroker service:', error);
+  // Check if broker exists
+  const broker = await Broker.findById(brokerId);
+  if (!broker) {
+    const error = new Error('Broker not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
     throw error;
   }
+
+  // Update broker
+  broker.name = name;
+  broker.address = address;
+
+  await broker.save();
+
+  return broker;
 };
 
 /**
@@ -140,30 +109,24 @@ const updateBroker = async (brokerId, updateData) => {
  * @returns {Promise<void>}
  */
 const deleteBroker = async (brokerId) => {
-  try {
-    // Check if broker exists
-    const broker = await Broker.findById(brokerId);
-    if (!broker) {
-      const error = new Error('Broker not found');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // Check for dependent demat accounts
-    const accountCount = await DematAccount.countDocuments({ brokerId });
-    if (accountCount > 0) {
-      const error = new Error('Cannot delete broker with associated demat accounts');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Delete broker
-    await Broker.findByIdAndDelete(brokerId);
-    logger.info(`Broker deleted: ${brokerId}`);
-  } catch (error) {
-    logger.error('Error in deleteBroker service:', error);
+  // Check if broker exists
+  const broker = await Broker.findById(brokerId);
+  if (!broker) {
+    const error = new Error('Broker not found');
+    error.statusCode = 404;
     throw error;
   }
+
+  // Check for dependent demat accounts
+  const accountCount = await DematAccount.countDocuments({ brokerId });
+  if (accountCount > 0) {
+    const error = new Error('Cannot delete broker with associated demat accounts');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Delete broker
+  await Broker.findByIdAndDelete(brokerId);
 };
 
 module.exports = {

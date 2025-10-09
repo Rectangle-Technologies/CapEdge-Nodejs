@@ -99,7 +99,6 @@ const startServer = async () => {
     // Try to connect to MongoDB, but don't fail if it's not available
     try {
       await connectDB();
-      logger.info('MongoDB connected successfully');
     } catch (dbError) {
       logger.warn('MongoDB connection failed, starting server without database:', dbError.message);
       logger.warn('Please start MongoDB and restart the server for full functionality');
@@ -107,7 +106,7 @@ const startServer = async () => {
     
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
-      logger.info('Health check available at: http://localhost:' + PORT + '/health');
+      logger.info('Health check available at /health');
       if (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost')) {
         logger.info('💡 To fully test the API, please start MongoDB and restart the server');
         logger.info('💡 MongoDB connection string: ' + (process.env.MONGODB_URI || 'mongodb://localhost:27017/capedge'));
