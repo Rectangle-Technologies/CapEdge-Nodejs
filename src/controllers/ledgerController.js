@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const ledgerService = require('../services/ledgerService');
 const exportService = require('../services/exportService');
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 const getLedgerEntries = async (req, res, next) => {
   try {
@@ -16,11 +17,7 @@ const getLedgerEntries = async (req, res, next) => {
     
     const result = await ledgerService.getLedgerEntries(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'Ledger entries retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'Ledger entries retrieved successfully');
   } catch (error) {
     next(error);
   }

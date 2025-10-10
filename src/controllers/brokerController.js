@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const brokerService = require('../services/brokerService');
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 /**
  * Get all brokers with optional search and pagination
@@ -14,11 +15,7 @@ const getBrokers = async (req, res, next) => {
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     });
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'Brokers retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'Brokers retrieved successfully');
   } catch (error) {
     next(error);
   }
@@ -42,11 +39,7 @@ const createBroker = async (req, res, next) => {
 
     const broker = await brokerService.createBroker(req.body);
 
-    res.status(201).json({
-      success: true,
-      data: { broker },
-      message: 'Broker created successfully'
-    });
+    return ApiResponse.created(res, { broker }, 'Broker created successfully');
   } catch (error) {
     next(error);
   }
@@ -70,11 +63,7 @@ const updateBroker = async (req, res, next) => {
 
     const broker = await brokerService.updateBroker(req.params.id, req.body);
 
-    res.json({
-      success: true,
-      data: { broker },
-      message: 'Broker updated successfully'
-    });
+    return ApiResponse.success(res, { broker }, 'Broker updated successfully');
   } catch (error) {
     next(error);
   }
@@ -88,10 +77,7 @@ const deleteBroker = async (req, res, next) => {
   try {
     await brokerService.deleteBroker(req.params.id);
 
-    res.json({
-      success: true,
-      message: 'Broker deleted successfully'
-    });
+    return ApiResponse.success(res, null, 'Broker deleted successfully');
   } catch (error) {
     next(error);
   }

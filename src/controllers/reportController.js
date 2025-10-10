@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const reportService = require('../services/reportService');
 const exportService = require('../services/exportService');
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 const getPnLReport = async (req, res, next) => {
   try {
@@ -16,11 +17,7 @@ const getPnLReport = async (req, res, next) => {
     
     const result = await reportService.getPnLRecords(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'P&L report retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'P&L report retrieved successfully');
   } catch (error) {
     next(error);
   }
@@ -75,11 +72,7 @@ const getHoldingsReport = async (req, res, next) => {
     
     const result = await reportService.getHoldings(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'Holdings report retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'Holdings report retrieved successfully');
   } catch (error) {
     next(error);
   }

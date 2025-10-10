@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const transactionService = require('../services/transactionService');
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 const getTransactions = async (req, res, next) => {
   try {
@@ -17,11 +18,7 @@ const getTransactions = async (req, res, next) => {
     
     const result = await transactionService.getTransactions(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'Transactions retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'Transactions retrieved successfully');
   } catch (error) {
     next(error);
   }
@@ -31,19 +28,12 @@ const createTransaction = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        errors: errors.array()
-      });
+      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
     }
 
     const transaction = await transactionService.createTransaction(req.body);
     
-    res.status(201).json({
-      success: true,
-      data: { transaction },
-      message: 'Transaction created successfully'
-    });
+    return ApiResponse.created(res, { transaction }, 'Transaction created successfully');
   } catch (error) {
     next(error);
   }
@@ -53,19 +43,12 @@ const updateTransaction = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        errors: errors.array()
-      });
+      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
     }
 
     const transaction = await transactionService.updateTransaction(req.params.id, req.body);
     
-    res.json({
-      success: true,
-      data: { transaction },
-      message: 'Transaction updated successfully'
-    });
+    return ApiResponse.success(res, { transaction }, 'Transaction updated successfully');
   } catch (error) {
     next(error);
   }
@@ -75,10 +58,7 @@ const deleteTransaction = async (req, res, next) => {
   try {
     await transactionService.deleteTransaction(req.params.id);
     
-    res.json({
-      success: true,
-      message: 'Transaction deleted successfully'
-    });
+    return ApiResponse.success(res, null, 'Transaction deleted successfully');
   } catch (error) {
     next(error);
   }

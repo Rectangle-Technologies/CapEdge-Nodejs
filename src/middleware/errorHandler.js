@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 const errorHandler = (err, req, res, next) => {
   // Service layer errors (errors with statusCode property)
@@ -11,12 +12,11 @@ const errorHandler = (err, req, res, next) => {
     stack: err.stack,
   });
 
-  res.status(statusCode).json({
-    success: false,
-    reasonCode,
-    message,
-    ...(err.field && { field: err.field })
-  });
+  // Prepare additional data
+  const additionalData = {};
+  if (err.field) additionalData.field = err.field;
+
+  return ApiResponse.error(res, message, statusCode, reasonCode, additionalData);
 };
 
 module.exports = errorHandler;

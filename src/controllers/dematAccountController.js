@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const dematAccountService = require('../services/dematAccountService');
 const logger = require('../utils/logger');
+const ApiResponse = require('../utils/response');
 
 const getDematAccounts = async (req, res, next) => {
   try {
@@ -13,11 +14,7 @@ const getDematAccounts = async (req, res, next) => {
     
     const result = await dematAccountService.getDematAccounts(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'Demat accounts retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'Demat accounts retrieved successfully');
   } catch (error) {
     next(error);
   }
@@ -27,19 +24,12 @@ const createDematAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        errors: errors.array()
-      });
+      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
     }
 
     const dematAccount = await dematAccountService.createDematAccount(req.body);
     
-    res.status(201).json({
-      success: true,
-      data: { dematAccount },
-      message: 'Demat account created successfully'
-    });
+    return ApiResponse.created(res, { dematAccount }, 'Demat account created successfully');
   } catch (error) {
     next(error);
   }
@@ -49,19 +39,12 @@ const updateDematAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(422).json({
-        success: false,
-        errors: errors.array()
-      });
+      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
     }
 
     const dematAccount = await dematAccountService.updateDematAccount(req.params.id, req.body);
     
-    res.json({
-      success: true,
-      data: { dematAccount },
-      message: 'Demat account updated successfully'
-    });
+    return ApiResponse.success(res, { dematAccount }, 'Demat account updated successfully');
   } catch (error) {
     next(error);
   }
@@ -71,10 +54,7 @@ const deleteDematAccount = async (req, res, next) => {
   try {
     await dematAccountService.deleteDematAccount(req.params.id);
     
-    res.json({
-      success: true,
-      message: 'Demat account deleted successfully'
-    });
+    return ApiResponse.success(res, null, 'Demat account deleted successfully');
   } catch (error) {
     next(error);
   }

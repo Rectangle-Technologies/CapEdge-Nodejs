@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const userAccountService = require('../services/userAccountService');
+const ApiResponse = require('../utils/response');
 
 const getUserAccounts = async (req, res, next) => {
   try {
@@ -17,11 +18,7 @@ const getUserAccounts = async (req, res, next) => {
     
     const result = await userAccountService.getUserAccounts(filters);
     
-    res.json({
-      success: true,
-      data: result,
-      message: 'User accounts retrieved successfully'
-    });
+    return ApiResponse.success(res, result, 'User accounts retrieved successfully');
   } catch (error) {
     next(error);
   }
@@ -41,11 +38,7 @@ const createUserAccount = async (req, res, next) => {
 
     const userAccount = await userAccountService.createUserAccount(req.body);
     
-    res.status(201).json({
-      success: true,
-      data: { userAccount },
-      message: 'User account created successfully'
-    });
+    return ApiResponse.created(res, { userAccount }, 'User account created successfully');
   } catch (error) {
     next(error);
   }
@@ -65,11 +58,7 @@ const updateUserAccount = async (req, res, next) => {
 
     const userAccount = await userAccountService.updateUserAccount(req.params.id, req.body);
     
-    res.json({
-      success: true,
-      data: { userAccount },
-      message: 'User account updated successfully'
-    });
+    return ApiResponse.success(res, { userAccount }, 'User account updated successfully');
   } catch (error) {
     next(error);
   }
@@ -79,10 +68,7 @@ const deleteUserAccount = async (req, res, next) => {
   try {
     await userAccountService.deleteUserAccount(req.params.id);
     
-    res.json({
-      success: true,
-      message: 'User account deleted successfully'
-    });
+    return ApiResponse.success(res, null, 'User account deleted successfully');
   } catch (error) {
     next(error);
   }

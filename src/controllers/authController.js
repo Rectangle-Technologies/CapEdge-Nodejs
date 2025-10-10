@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const authService = require('../services/authService');
+const ApiResponse = require('../utils/response');
 
 /**
  * Login user and generate JWT token
@@ -22,11 +23,7 @@ const login = async (req, res, next) => {
 
     const result = await authService.login(req.body);
 
-    res.json({
-      success: true,
-      data: result,
-      message: 'Login successful'
-    });
+    return ApiResponse.success(res, result, 'Login successful');
   } catch (error) {
     next(error);
   }
@@ -40,13 +37,7 @@ const login = async (req, res, next) => {
  */
 const validateToken = async (req, res, next) => {
   try {
-      res.json({
-        success: true,
-        data: {
-          valid: true,
-        },
-        message: 'Token is valid'
-      });
+    return ApiResponse.success(res, { valid: true }, 'Token is valid');
   } catch (error) {
     next(error);
   }
