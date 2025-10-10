@@ -29,12 +29,12 @@ const createBroker = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      throw {
-        statusCode: 422,
-        message: errors.array()[0].msg,
-        reasonCode: 'BAD_REQUEST',
-        field: errors.array()[0].path
-      };
+      return ApiResponse.validationError(
+        res, 
+        errors.array()[0].msg, 
+        errors.array()[0].path,
+        errors.array()
+      );
     }
 
     const broker = await brokerService.createBroker(req.body);
@@ -53,12 +53,12 @@ const updateBroker = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      throw {
-        statusCode: 422,
-        message: errors.array()[0].msg,
-        reasonCode: 'BAD_REQUEST',
-        field: errors.array()[0].path
-      };
+      return ApiResponse.validationError(
+        res, 
+        errors.array()[0].msg, 
+        errors.array()[0].path,
+        errors.array()
+      );
     }
 
     const broker = await brokerService.updateBroker(req.params.id, req.body);

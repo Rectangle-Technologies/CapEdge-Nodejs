@@ -13,12 +13,12 @@ const login = async (req, res, next) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      throw {
-        statusCode: 422,
-        message: errors.array()[0].msg,
-        reasonCode: 'BAD_REQUEST',
-        field: errors.array()[0].path
-      };
+      return ApiResponse.validationError(
+        res, 
+        errors.array()[0].msg, 
+        errors.array()[0].path,
+        errors.array()
+      );
     }
 
     const result = await authService.login(req.body);

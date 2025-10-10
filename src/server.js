@@ -10,6 +10,7 @@ const connectDB = require('./config/database');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const authMiddleware = require('./middleware/auth');
+const ApiResponse = require('./utils/response');
 
 // Import Routes
 const authRoutes = require('./routes/auth');
@@ -37,9 +38,8 @@ app.use(cors({
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minute
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
+  handler: (req, res) => {
+    return ApiResponse.error(res, 'Too many requests from this IP, please try again later.', 429, 'RATE_LIMIT_EXCEEDED');
   }
 });
 // app.use(limiter);
@@ -60,12 +60,10 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Server is healthy',
+  return ApiResponse.success(res, {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
-  });
+  }, 'Server is healthy');
 });
 
 // API Routes
@@ -82,10 +80,7 @@ app.use('/ledger', authMiddleware, ledgerRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
+  return ApiResponse.notFound(res, 'Route not found');
 });
 
 // Global error handler

@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
+const ApiResponse = require('../utils/response');
 
 const router = express.Router();
 
@@ -10,9 +11,8 @@ const router = express.Router();
 const loginLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minute
   max: parseInt(process.env.LOGIN_RATE_LIMIT_MAX) || 5, // 5 attempts per minute
-  message: {
-    success: false,
-    message: 'Too many login attempts, please try again later.'
+  handler: (req, res) => {
+    return ApiResponse.error(res, 'Too many login attempts, please try again later.', 429, 'RATE_LIMIT_EXCEEDED');
   },
   standardHeaders: true,
   legacyHeaders: false
