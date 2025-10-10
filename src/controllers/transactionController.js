@@ -28,7 +28,12 @@ const createTransaction = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const transaction = await transactionService.createTransaction(req.body);
@@ -43,7 +48,12 @@ const updateTransaction = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const transaction = await transactionService.updateTransaction(req.params.id, req.body);

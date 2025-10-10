@@ -28,12 +28,12 @@ const createUserAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(
-        res, 
-        errors.array()[0].msg, 
-        errors.array()[0].path,
-        errors.array()
-      );
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const userAccount = await userAccountService.createUserAccount(req.body);
@@ -48,12 +48,12 @@ const updateUserAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(
-        res, 
-        errors.array()[0].msg, 
-        errors.array()[0].path,
-        errors.array()
-      );
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const userAccount = await userAccountService.updateUserAccount(req.params.id, req.body);

@@ -24,7 +24,12 @@ const createDematAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const dematAccount = await dematAccountService.createDematAccount(req.body);
@@ -39,7 +44,12 @@ const updateDematAccount = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const dematAccount = await dematAccountService.updateDematAccount(req.params.id, req.body);

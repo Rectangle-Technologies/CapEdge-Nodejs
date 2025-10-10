@@ -80,7 +80,10 @@ app.use('/ledger', authMiddleware, ledgerRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
-  return ApiResponse.notFound(res, 'Route not found');
+  const error = new Error('Route not found');
+  error.statusCode = 404;
+  error.reasonCode = 'NOT_FOUND';
+  throw error;
 });
 
 // Global error handler

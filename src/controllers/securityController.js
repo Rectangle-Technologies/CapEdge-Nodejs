@@ -25,7 +25,12 @@ const createSecurity = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     console.log('Request body for creating security:', req.body);
@@ -42,16 +47,27 @@ const bulkCreateSecurities = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     // Validate that body is an array
     if (!Array.isArray(req.body)) {
-      return ApiResponse.badRequest(res, 'Request body must be an array of securities');
+      const error = new Error('Request body must be an array of securities');
+      error.statusCode = 400;
+      error.reasonCode = 'BAD_REQUEST';
+      throw error;
     }
 
     if (req.body.length === 0) {
-      return ApiResponse.badRequest(res, 'Array cannot be empty');
+      const error = new Error('Array cannot be empty');
+      error.statusCode = 400;
+      error.reasonCode = 'BAD_REQUEST';
+      throw error;
     }
 
     const result = await securityService.bulkCreateSecurities(req.body);
@@ -71,7 +87,12 @@ const updateSecurity = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return ApiResponse.validationError(res, 'Validation failed', null, errors.array());
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      error.errors = errors.array();
+      throw error;
     }
 
     const security = await securityService.updateSecurity(req.params.id, req.body);
