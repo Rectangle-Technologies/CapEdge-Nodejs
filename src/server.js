@@ -39,7 +39,10 @@ const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000, // 1 minute
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   handler: (req, res) => {
-    return ApiResponse.error(res, 'Too many requests from this IP, please try again later.', 429, 'RATE_LIMIT_EXCEEDED');
+    const error = new Error('Too many requests from this IP, please try again later.');
+    error.statusCode = 429;
+    error.reasonCode = 'RATE_LIMIT_EXCEEDED';
+    throw error;
   }
 });
 // app.use(limiter);
