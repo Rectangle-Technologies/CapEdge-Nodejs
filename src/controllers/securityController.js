@@ -8,7 +8,6 @@ const getSecurities = async (req, res, next) => {
     const filters = {
       name: req.query.name,
       type: req.query.type,
-      exchangeId: req.query.exchangeId,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
@@ -29,11 +28,8 @@ const createSecurity = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
-
-    console.log('Request body for creating security:', req.body);
 
     const security = await securityService.createSecurity(req.body);
     

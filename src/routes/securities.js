@@ -20,12 +20,6 @@ const securityValidation = [
     .withMessage('Security type is required')
     .isIn(securityTypes)
     .withMessage(`Security type must be one of: ${securityTypes.join(', ')}`),
-  body('symbol')
-    .notEmpty()
-    .withMessage('Security symbol is required')
-    .trim()
-    .isLength({ max: 50 })
-    .withMessage('Security symbol cannot exceed 50 characters'),
   body('strikePrice')
     .optional()
     .isFloat({ min: 0 })
@@ -54,18 +48,14 @@ const queryValidation = [
   query('type')
     .optional()
     .isIn(securityTypes)
-    .withMessage(`Type must be one of: ${securityTypes.join(', ')}`),
-  query('exchangeId')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid exchange ID')
+    .withMessage(`Type must be one of: ${securityTypes.join(', ')}`)
 ];
 
 // Routes
-router.get('/', queryValidation, securityController.getSecurities);
-router.post('/', securityValidation, securityController.createSecurity);
-router.post('/bulk', securityController.bulkCreateSecurities);
-router.put('/:id', idValidation, securityValidation, securityController.updateSecurity);
-router.delete('/:id', idValidation, securityController.deleteSecurity);
+router.get('/get-all', queryValidation, securityController.getSecurities);
+router.post('/create', securityValidation, securityController.createSecurity);
+router.post('/bulk-create', securityController.bulkCreateSecurities);
+router.put('/update/:id', idValidation, securityValidation, securityController.updateSecurity);
+router.delete('/delete/:id', idValidation, securityController.deleteSecurity);
 
 module.exports = router;

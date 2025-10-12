@@ -1,5 +1,4 @@
 const LedgerEntry = require('../models/LedgerEntry');
-const logger = require('../utils/logger');
 
 /**
  * Ledger Service
@@ -8,23 +7,25 @@ const logger = require('../utils/logger');
 
 /**
  * Get ledger entries with filters and running balance
- * @param {Object} filters - { startDate, endDate, dematAccountId, transactionType, limit, offset }
+ * @param {Object} filters - { startDate, endDate, dematAccountId, transactionType, limit, pageNo }
  * @returns {Promise<Object>} - { entries, summary, pagination }
  */
 const getLedgerEntries = async (filters = {}) => {
-  try {
-    const { startDate, endDate, dematAccountId, transactionType, limit = 50, offset = 0 } = filters;
-    
-    // Build match query
-    const matchQuery = {};
-    
-    if (startDate || endDate) {
-      matchQuery.date = {};
-      if (startDate) matchQuery.date.$gte = new Date(startDate);
-      if (endDate) matchQuery.date.$lte = new Date(endDate);
-    }
-    
-    if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+  const { startDate, endDate, dematAccountId, transactionType, limit = 50, pageNo = 1 } = filters;
+  
+  // Build match query
+  const matchQuery = {};
+  
+  if (startDate || endDate) {
+    matchQuery.date = {};
+    if (startDate) matchQuery.date.$gte = new Date(startDate);
+    if (endDate) matchQuery.date.$lte = new Date(endDate);
+  }
+  
+  if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+
+  // Calculate offset for pagination
+  const offset = (pageNo - 1) * limit;
 
     // Aggregation pipeline for ledger entries
     const pipeline = [
@@ -302,20 +303,17 @@ const getLedgerEntries = async (filters = {}) => {
       summary.currentBalance = allEntries.length > 0 ? allEntries[0].currentBalance : 0;
     }
 
-    return {
-      entries,
-      summary,
-      pagination: {
-        total,
-        count: entries.length,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      }
-    };
-  } catch (error) {
-    logger.error('Error in getLedgerEntries service:', error);
-    throw error;
-  }
+  return {
+    entries,
+    summary,
+    pagination: {
+      total,
+      count: entries.length,
+      limit: parseInt(limit),
+      pageNo: parseInt(pageNo),
+      totalPages: Math.ceil(total / limit)
+    }
+  };
 };
 
 module.exports = {

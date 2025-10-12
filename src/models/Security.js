@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
-
-const securityTypes = ['EQUITY', 'FUTURES', 'OPTIONS', 'COMMODITY', 'CURRENCY', 'BOND', 'ETF', 'MUTUAL_FUND'];
+const { SECURITY_TYPES_ARRAY, DERIVATIVE_TYPES } = require('../constants');
 
 const securitySchema = new mongoose.Schema({
   name: {
@@ -14,8 +13,8 @@ const securitySchema = new mongoose.Schema({
     type: String,
     required: [true, 'Security type is required'],
     enum: {
-      values: securityTypes,
-      message: 'Security type must be one of: ' + securityTypes.join(', ')
+      values: SECURITY_TYPES_ARRAY,
+      message: 'Security type must be one of: ' + SECURITY_TYPES_ARRAY.join(', ')
     }
   },
   // For derivatives only (OPTIONS, FUTURES)
@@ -24,8 +23,7 @@ const securitySchema = new mongoose.Schema({
     min: [0, 'Strike price must be positive'],
     validate: {
       validator: function(value) {
-        const derivativeTypes = ['OPTIONS', 'FUTURES'];
-        if (derivativeTypes.includes(this.type)) {
+        if (DERIVATIVE_TYPES.includes(this.type)) {
           return value != null && value > 0;
         }
         return value == null;
@@ -37,8 +35,7 @@ const securitySchema = new mongoose.Schema({
     type: Date,
     validate: {
       validator: function(value) {
-        const derivativeTypes = ['OPTIONS', 'FUTURES'];
-        if (derivativeTypes.includes(this.type)) {
+        if (DERIVATIVE_TYPES.includes(this.type)) {
           return value != null && value > new Date();
         }
         return value == null;

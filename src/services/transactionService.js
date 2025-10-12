@@ -5,7 +5,6 @@ const DematAccount = require('../models/DematAccount');
 const LedgerEntry = require('../models/LedgerEntry');
 const UnmatchedRecords = require('../models/UnmatchedRecords');
 const MatchedRecords = require('../models/MatchedRecords');
-const logger = require('../utils/logger');
 
 /**
  * Transaction Service
@@ -14,64 +13,63 @@ const logger = require('../utils/logger');
 
 /**
  * Get all transactions with optional filters and pagination
- * @param {Object} filters - { startDate, endDate, type, securityId, dematAccountId, deliveryType, limit, offset }
+ * @param {Object} filters - { startDate, endDate, type, securityId, dematAccountId, deliveryType, limit, pageNo }
  * @returns {Promise<Object>} - { transactions, pagination }
  */
 const getTransactions = async (filters = {}) => {
-  try {
-    const { startDate, endDate, type, securityId, dematAccountId, deliveryType, limit = 50, offset = 0 } = filters;
-    
-    // Build query
-    const query = {};
-    
-    if (startDate || endDate) {
-      query.date = {};
-      if (startDate) query.date.$gte = new Date(startDate);
-      if (endDate) query.date.$lte = new Date(endDate);
-    }
-    
-    if (type) query.type = type;
-    if (securityId) query.securityId = securityId;
-    if (dematAccountId) query.dematAccountId = dematAccountId;
-    if (deliveryType) query.deliveryType = deliveryType;
-
-    // Get total count
-    const total = await Transaction.countDocuments(query);
-
-    // Fetch transactions with populated references
-    const transactions = await Transaction.find(query)
-      .populate({
-        path: 'securityId',
-        populate: {
-          path: 'stockExchangeId',
-          select: 'name code country'
-        }
-      })
-      .populate({
-        path: 'dematAccountId',
-        populate: [
-          { path: 'userAccountId', select: 'name panNumber' },
-          { path: 'brokerId', select: 'name panNumber' }
-        ]
-      })
-      .sort({ date: -1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(offset))
-      .lean();
-
-    return {
-      transactions,
-      pagination: {
-        total,
-        count: transactions.length,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      }
-    };
-  } catch (error) {
-    logger.error('Error in getTransactions service:', error);
-    throw error;
+  const { startDate, endDate, type, securityId, dematAccountId, deliveryType, limit = 50, pageNo = 1 } = filters;
+  
+  // Build query
+  const query = {};
+  
+  if (startDate || endDate) {
+    query.date = {};
+    if (startDate) query.date.$gte = new Date(startDate);
+    if (endDate) query.date.$lte = new Date(endDate);
   }
+  
+  if (type) query.type = type;
+  if (securityId) query.securityId = securityId;
+  if (dematAccountId) query.dematAccountId = dematAccountId;
+  if (deliveryType) query.deliveryType = deliveryType;
+
+  // Calculate offset for pagination
+  const offset = (pageNo - 1) * limit;
+
+  // Get total count
+  const total = await Transaction.countDocuments(query);
+
+  // Fetch transactions with populated references
+  const transactions = await Transaction.find(query)
+    .populate({
+      path: 'securityId',
+      populate: {
+        path: 'stockExchangeId',
+        select: 'name code country'
+      }
+    })
+    .populate({
+      path: 'dematAccountId',
+      populate: [
+        { path: 'userAccountId', select: 'name panNumber' },
+        { path: 'brokerId', select: 'name panNumber' }
+      ]
+    })
+    .sort({ date: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(offset))
+    .lean();
+
+  return {
+    transactions,
+    pagination: {
+      total,
+      count: transactions.length,
+      limit: parseInt(limit),
+      pageNo: parseInt(pageNo),
+      totalPages: Math.ceil(total / limit)
+    }
+  };
 };
 
 /**
@@ -178,11 +176,9 @@ const createTransaction = async (transactionData) => {
       }
     ]);
 
-    logger.info(`Transaction created: ${transaction._id}`);
     return transaction;
   } catch (error) {
     await session.abortTransaction();
-    logger.error('Error in createTransaction service:', error);
     throw error;
   } finally {
     session.endSession();
@@ -360,11 +356,9 @@ const updateTransaction = async (transactionId, updateData) => {
       }
     ]);
 
-    logger.info(`Transaction updated: ${transaction._id}`);
     return transaction;
   } catch (error) {
     await session.abortTransaction();
-    logger.error('Error in updateTransaction service:', error);
     throw error;
   } finally {
     session.endSession();
@@ -431,10 +425,8 @@ const deleteTransaction = async (transactionId) => {
     await Transaction.findByIdAndDelete(transactionId, { session });
 
     await session.commitTransaction();
-    logger.info(`Transaction deleted: ${transactionId}`);
   } catch (error) {
     await session.abortTransaction();
-    logger.error('Error in deleteTransaction service:', error);
     throw error;
   } finally {
     session.endSession();

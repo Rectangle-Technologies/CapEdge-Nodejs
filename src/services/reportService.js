@@ -1,6 +1,5 @@
 const MatchedRecords = require('../models/MatchedRecords');
 const UnmatchedRecords = require('../models/UnmatchedRecords');
-const logger = require('../utils/logger');
 
 /**
  * Report Service
@@ -9,24 +8,26 @@ const logger = require('../utils/logger');
 
 /**
  * Get P&L (Profit & Loss) records with filters
- * @param {Object} filters - { startDate, endDate, capitalGainType, dematAccountId, limit, offset }
+ * @param {Object} filters - { startDate, endDate, capitalGainType, dematAccountId, limit, pageNo }
  * @returns {Promise<Object>} - { records, summary, pagination }
  */
 const getPnLRecords = async (filters = {}) => {
-  try {
-    const { startDate, endDate, capitalGainType, dematAccountId, limit = 50, offset = 0 } = filters;
-    
-    // Build match query
-    const matchQuery = {};
-    
-    if (startDate || endDate) {
-      matchQuery.sellDate = {};
-      if (startDate) matchQuery.sellDate.$gte = new Date(startDate);
-      if (endDate) matchQuery.sellDate.$lte = new Date(endDate);
-    }
-    
-    if (capitalGainType) matchQuery.capitalGainType = capitalGainType;
-    if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+  const { startDate, endDate, capitalGainType, dematAccountId, limit = 50, pageNo = 1 } = filters;
+  
+  // Build match query
+  const matchQuery = {};
+  
+  if (startDate || endDate) {
+    matchQuery.sellDate = {};
+    if (startDate) matchQuery.sellDate.$gte = new Date(startDate);
+    if (endDate) matchQuery.sellDate.$lte = new Date(endDate);
+  }
+  
+  if (capitalGainType) matchQuery.capitalGainType = capitalGainType;
+  if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+
+  // Calculate offset for pagination
+  const offset = (pageNo - 1) * limit;
 
     // Aggregation pipeline for P&L report
     const pipeline = [
@@ -225,34 +226,33 @@ const getPnLRecords = async (filters = {}) => {
 
     delete summary._id;
 
-    return {
-      records,
-      summary,
-      pagination: {
-        total,
-        count: records.length,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      }
-    };
-  } catch (error) {
-    logger.error('Error in getPnLRecords service:', error);
-    throw error;
-  }
+  return {
+    records,
+    summary,
+    pagination: {
+      total,
+      count: records.length,
+      limit: parseInt(limit),
+      pageNo: parseInt(pageNo),
+      totalPages: Math.ceil(total / limit)
+    }
+  };
 };
 
 /**
  * Get Holdings (current positions) with filters
- * @param {Object} filters - { securityName, securityType, dematAccountId, limit, offset }
+ * @param {Object} filters - { securityName, securityType, dematAccountId, limit, pageNo }
  * @returns {Promise<Object>} - { holdings, summary, pagination }
  */
 const getHoldings = async (filters = {}) => {
-  try {
-    const { securityName, securityType, dematAccountId, limit = 50, offset = 0 } = filters;
-    
-    // Build match query
-    const matchQuery = {};
-    if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+  const { securityName, securityType, dematAccountId, limit = 50, pageNo = 1 } = filters;
+  
+  // Build match query
+  const matchQuery = {};
+  if (dematAccountId) matchQuery.dematAccountId = dematAccountId;
+
+  // Calculate offset for pagination
+  const offset = (pageNo - 1) * limit;
 
     // Aggregation pipeline for holdings report
     const pipeline = [
@@ -474,13 +474,10 @@ const getHoldings = async (filters = {}) => {
         total,
         count: holdings.length,
         limit: parseInt(limit),
-        offset: parseInt(offset)
+        pageNo: parseInt(pageNo),
+        totalPages: Math.ceil(total / limit)
       }
     };
-  } catch (error) {
-    logger.error('Error in getHoldings service:', error);
-    throw error;
-  }
 };
 
 module.exports = {
