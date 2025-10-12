@@ -1,11 +1,9 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const securityController = require('../controllers/securityController');
+const { SECURITY_TYPES_ARRAY } = require('../constants');
 
 const router = express.Router();
-
-// Security types
-const securityTypes = ['EQUITY', 'FUTURES', 'OPTIONS', 'COMMODITY', 'CURRENCY', 'BOND', 'ETF', 'MUTUAL_FUND'];
 
 // Validation rules
 const securityValidation = [
@@ -18,8 +16,8 @@ const securityValidation = [
   body('type')
     .notEmpty()
     .withMessage('Security type is required')
-    .isIn(securityTypes)
-    .withMessage(`Security type must be one of: ${securityTypes.join(', ')}`),
+    .isIn(SECURITY_TYPES_ARRAY)
+    .withMessage(`Security type must be one of: ${SECURITY_TYPES_ARRAY.join(', ')}`),
   body('strikePrice')
     .optional()
     .isFloat({ min: 0 })
@@ -47,8 +45,8 @@ const queryValidation = [
     .withMessage('Page number must be a positive integer'),
   query('type')
     .optional()
-    .isIn(securityTypes)
-    .withMessage(`Type must be one of: ${securityTypes.join(', ')}`)
+    .isIn(SECURITY_TYPES_ARRAY)
+    .withMessage(`Type must be one of: ${SECURITY_TYPES_ARRAY.join(', ')}`)
 ];
 
 // Routes

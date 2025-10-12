@@ -21,6 +21,7 @@ const getSecurities = async (filters = {}) => {
   // Build query
   const query = {};
   if (name) {
+    // Match with any type of case and partial match
     query.name = { $regex: name, $options: 'i' };
   }
   if (type) {
@@ -143,13 +144,14 @@ const bulkCreateSecurities = async (securitiesData) => {
  * @returns {Promise<Object>} - Updated security
  */
 const updateSecurity = async (securityId, updateData) => {
-  const { name, type, strikePrice, expiry, stockExchangeId } = updateData;
+  const { name, type, strikePrice, expiry } = updateData;
 
   // Check if security exists
   const security = await Security.findById(securityId);
   if (!security) {
     const error = new Error('Security not found');
     error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
     throw error;
   }
 
@@ -174,15 +176,25 @@ const updateSecurity = async (securityId, updateData) => {
     }
   }
 
+  // Check for duplicate security name
+  const existingSecurity = await Security.findOne({ 
+    _id: { $ne: securityId },
+    name: name.trim(), 
+    type 
+  });
+  if (existingSecurity) {
+    const error = new Error('Another security with this name and type already exists');
+    error.statusCode = 409;
+    error.reasonCode = 'ALREADY_EXISTS';
+    throw error;
+  }
+
   // Update security
   security.name = name;
-  security.type = type;
   security.strikePrice = DERIVATIVE_TYPES.includes(type) ? strikePrice : null;
   security.expiry = DERIVATIVE_TYPES.includes(type) ? expiry : null;
-  security.stockExchangeId = stockExchangeId;
 
   await security.save();
-  await security.populate('stockExchangeId', 'name code country');
   
   return security;
 };
