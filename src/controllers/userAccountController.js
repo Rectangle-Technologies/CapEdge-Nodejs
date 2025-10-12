@@ -32,7 +32,6 @@ const createUserAccount = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 
@@ -52,7 +51,6 @@ const updateUserAccount = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 

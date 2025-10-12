@@ -5,7 +5,7 @@ const ApiResponse = require('../utils/response');
 
 /**
  * Get all brokers with optional search and pagination
- * @route GET /brokers
+ * @route GET /broker/get-all
  */
 const getBrokers = async (req, res, next) => {
   try {
@@ -23,7 +23,7 @@ const getBrokers = async (req, res, next) => {
 
 /**
  * Create a new broker
- * @route POST /brokers
+ * @route POST /broker/create
  */
 const createBroker = async (req, res, next) => {
   try {
@@ -33,7 +33,6 @@ const createBroker = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 
@@ -47,7 +46,7 @@ const createBroker = async (req, res, next) => {
 
 /**
  * Update an existing broker
- * @route PUT /brokers/:id
+ * @route PUT /broker/update/:id
  */
 const updateBroker = async (req, res, next) => {
   try {
@@ -57,7 +56,6 @@ const updateBroker = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 

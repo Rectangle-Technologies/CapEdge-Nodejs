@@ -12,7 +12,7 @@ const DematAccount = require('../models/DematAccount');
  * @returns {Promise<Object>} - { brokers, pagination }
  */
 const getBrokers = async (filters = {}) => {
-  const { name, limit = 50, pageNo = 1 } = filters;
+  const { name, limit, pageNo = 1 } = filters;
   
   // Calculate offset from pageNo and limit
   const offset = (pageNo - 1) * limit;

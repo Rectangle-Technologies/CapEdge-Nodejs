@@ -20,12 +20,7 @@ const dematAccountValidation = [
     .notEmpty()
     .withMessage('Balance is required')
     .isFloat({ min: 0 })
-    .withMessage('Balance must be a non-negative number'),
-  body('accountNumber')
-    .optional()
-    .trim()
-    .isLength({ max: 50 })
-    .withMessage('Account number cannot exceed 50 characters')
+    .withMessage('Balance must be a non-negative number')
 ];
 
 const idValidation = [
@@ -54,9 +49,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/', queryValidation, dematAccountController.getDematAccounts);
-router.post('/', dematAccountValidation, dematAccountController.createDematAccount);
-router.put('/:id', idValidation, dematAccountValidation, dematAccountController.updateDematAccount);
-router.delete('/:id', idValidation, dematAccountController.deleteDematAccount);
+router.get('/get-all', queryValidation, dematAccountController.getDematAccounts);
+router.post('/create', dematAccountValidation, dematAccountController.createDematAccount);
+router.put('/update/:id', idValidation, dematAccountValidation, dematAccountController.updateDematAccount);
+router.delete('/delete/:id', idValidation, dematAccountController.deleteDematAccount);
 
 module.exports = router;

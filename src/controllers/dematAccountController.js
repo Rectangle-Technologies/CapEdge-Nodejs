@@ -1,9 +1,14 @@
 const { validationResult } = require('express-validator');
 const dematAccountService = require('../services/dematAccountService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 const getDematAccounts = async (req, res, next) => {
+  if (!req.query.userAccountId && !req.query.brokerId) {
+    const error = new Error('At least one filter (userAccountId or brokerId) must be provided');
+    error.statusCode = 422;
+    error.reasonCode = 'BAD_REQUEST';
+    throw error;
+  }
   try {
     const filters = {
       userAccountId: req.query.userAccountId,
@@ -28,7 +33,6 @@ const createDematAccount = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 
@@ -48,7 +52,6 @@ const updateDematAccount = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 

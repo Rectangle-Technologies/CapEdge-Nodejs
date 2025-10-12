@@ -13,7 +13,7 @@ const Transaction = require('../models/Transaction');
  * @returns {Promise<Object>} - { userAccounts, pagination }
  */
 const getUserAccounts = async (filters = {}) => {
-  const { name, includeDematAccounts, limit = 50, pageNo = 1 } = filters;
+  const { name, includeDematAccounts, limit, pageNo = 1 } = filters;
 
   // Calculate offset from pageNo and limit
   const offset = (pageNo - 1) * limit;

@@ -18,19 +18,6 @@ const securitySchema = new mongoose.Schema({
       message: 'Security type must be one of: ' + securityTypes.join(', ')
     }
   },
-  symbol: {
-    type: String,
-    required: [true, 'Security symbol is required'],
-    uppercase: true,
-    trim: true,
-    maxlength: [50, 'Security symbol cannot exceed 50 characters']
-  },
-  isin: {
-    type: String,
-    trim: true,
-    uppercase: true,
-    match: [/^[A-Z]{2}[A-Z0-9]{10}$/, 'Invalid ISIN format']
-  },
   // For derivatives only (OPTIONS, FUTURES)
   strikePrice: {
     type: Number,

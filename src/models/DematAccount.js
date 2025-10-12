@@ -18,11 +18,6 @@ const dematAccountSchema = new mongoose.Schema({
     required: [true, 'Balance is required'],
     min: [0, 'Balance cannot be negative'],
     set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
-  },
-  accountNumber: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Account number cannot exceed 50 characters']
   }
 }, {
   timestamps: true
