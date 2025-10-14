@@ -12,24 +12,24 @@ const financialYearSchema = new mongoose.Schema({
     required: [true, 'Start date is required'],
     index: true
   },
-  lastDate: {
+  endDate: {
     type: Date,
-    required: [true, 'Last date is required'],
+    required: [true, 'End date is required'],
     validate: {
       validator: function(value) {
         return value > this.startDate;
       },
-      message: 'Last date must be after start date'
+      message: 'End date must be after start date'
     }
   },
-  STCGrate: {
+  stcgRate: {
     type: Number,
     required: [true, 'STCG rate is required'],
     min: [0, 'STCG rate cannot be negative'],
     max: [100, 'STCG rate cannot exceed 100%'],
     set: value => value / 100 // Store as decimal (e.g., 15% as 0.15)
   },
-  LTCGrate: {
+  ltcgRate: {
     type: Number,
     required: [true, 'LTCG rate is required'],
     min: [0, 'LTCG rate cannot be negative'],

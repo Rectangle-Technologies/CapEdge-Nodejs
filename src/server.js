@@ -21,6 +21,7 @@ const dematAccountRoutes = require('./routes/dematAccounts');
 const transactionRoutes = require('./routes/transactions');
 const reportRoutes = require('./routes/reports');
 const ledgerRoutes = require('./routes/ledger');
+const financialYearRoutes = require('./routes/financialYear');
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use('/demat-account', authMiddleware, dematAccountRoutes);
 app.use('/transaction', authMiddleware, transactionRoutes);
 app.use('/report', authMiddleware, reportRoutes);
 app.use('/ledger', authMiddleware, ledgerRoutes);
+app.use('/financial-year', authMiddleware, financialYearRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
