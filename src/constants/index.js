@@ -4,13 +4,13 @@
  */
 
 // Security Types
-const SECURITY_TYPES_ARRAY = ['EQUITY', 'FUTURES', 'OPTIONS', 'COMMODITY', 'CURRENCY', 'BOND', 'ETF', 'MUTUAL_FUND'];
+const SECURITY_TYPES_ARRAY = ['EQUITY', 'FUTURES', 'OPTIONS', 'COMMODITY', 'MUTUAL_FUND'];
 
 // Derivative security types (require strike price and expiry)
 const DERIVATIVE_TYPES = ['OPTIONS', 'FUTURES'];
 
 // Non-derivative security types
-const NON_DERIVATIVE_TYPES = ['EQUITY', 'BOND', 'ETF', 'MUTUAL_FUND', 'COMMODITY', 'CURRENCY'];
+const NON_DERIVATIVE_TYPES = ['EQUITY', 'MUTUAL_FUND', 'COMMODITY'];
 
 module.exports = {
   SECURITY_TYPES_ARRAY,

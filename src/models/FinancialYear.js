@@ -1,4 +1,19 @@
 const mongoose = require('mongoose');
+const { holdingsSchema } = require('./Holdings');
+
+const reportSchema = new mongoose.Schema({
+  holdings: [holdingsSchema],
+  openingBalance: {
+    type: Number,
+    required: [true, 'Opening balance is required'],
+    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+  },
+  closingBalance: {
+    type: Number,
+    required: [true, 'Closing balance is required'],
+    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+  }
+})
 
 const financialYearSchema = new mongoose.Schema({
   title: {
@@ -16,7 +31,7 @@ const financialYearSchema = new mongoose.Schema({
     type: Date,
     required: [true, 'End date is required'],
     validate: {
-      validator: function(value) {
+      validator: function (value) {
         return value > this.startDate;
       },
       message: 'End date must be after start date'
@@ -36,9 +51,10 @@ const financialYearSchema = new mongoose.Schema({
     max: [100, 'LTCG rate cannot exceed 100%'],
     set: value => value / 100 // Store as decimal (e.g., 10% as 0.10)
   },
-  isActive: {
-    type: Boolean,
-    default: true
+  reports: {
+    type: Map,
+    of: reportSchema,
+    default: {}
   }
 }, {
   timestamps: true
@@ -49,7 +65,7 @@ financialYearSchema.index({ startDate: -1 });
 financialYearSchema.index({ startDate: 1, lastDate: 1 }); // For overlap checks
 
 // Validation to prevent overlapping financial years
-financialYearSchema.pre('save', async function(next) {
+financialYearSchema.pre('save', async function (next) {
   const overlap = await this.constructor.findOne({
     _id: { $ne: this._id },
     $or: [
