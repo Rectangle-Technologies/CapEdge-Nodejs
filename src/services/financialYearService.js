@@ -1,51 +1,146 @@
+const Holdings = require('../models/Holdings');
 const FinancialYear = require("../models/FinancialYear");
 
 const getFinancialYears = async (filters) => {
-  const { date } = filters;
-  const query = {};
-  
-  if (date) {
-    const filterDate = new Date(date);
-    query.$and = [
-      { startDate: { $lte: filterDate } },
-      { endDate: { $gte: filterDate } }
-    ];
-  }
-  
-  const financialYears = await FinancialYear.find(query).sort({ startDate: -1 });
-  return financialYears;
+	const { date } = filters;
+	const query = {};
+
+	if (date) {
+		const filterDate = new Date(date);
+		query.$and = [
+			{ startDate: { $lte: filterDate } },
+			{ endDate: { $gte: filterDate } }
+		];
+	}
+
+	const financialYears = await FinancialYear.find(query).sort({ startDate: -1 });
+	return financialYears;
 };
 
-const createFinancialYear = async (data) => {
-  const { date, stcgRate, ltcgRate } = data;
 
-  console.log(date)
+/**
+ * Find existing Financial Year or create a new one for the transaction date
+ * @private
+ */
+const findOrCreateFinancialYear = async (transactionDate, session) => {
+	// Find FY that contains this date
+	let financialYear = await FinancialYear.findOne({
+		startDate: { $lte: transactionDate },
+		endDate: { $gte: transactionDate }
+	});
 
-  const existingFinancialYear = await FinancialYear.findOne({
-    startDate: { $lte: date },
-    endDate: { $gte: date }
-  });
+	if (!!financialYear) {
+		return financialYear;
+	}
 
-  if (existingFinancialYear) {
-    const error = new Error('Financial year for this date already exists');
-    error.statusCode = 409;
-    error.reasonCode = 'ALREADY_EXISTS';
-    throw error;
-  }
+	// Check if prev FY exists
+	const prevYearDate = new Date(transactionDate);
+	prevYearDate.setFullYear(prevYearDate.getFullYear() - 1);
+	const prevFY = await FinancialYear.findOne({
+		startDate: { $lte: prevYearDate },
+		endDate: { $gte: prevYearDate }
+	}).session(session);
 
-  const financialYear = new FinancialYear({
-    startDate: new Date(Date.UTC(date.getFullYear(), 3, 1, 0, 0, 0, 0)), 
-    endDate: new Date(Date.UTC(date.getFullYear() + 1, 2, 31, 0, 0, 0, 0)), 
-    stcgRate,
-    ltcgRate,
-    title: `FY ${date.getFullYear()}-${(date.getFullYear() + 1).toString().slice(-2)}`
-  });
+	if (!prevFY) {
+		const error = new Error('Financial year for this date does not exist');
+		error.statusCode = 404;
+		error.reasonCode = 'NOT_FOUND';
+		throw error;
+	}
 
-  await financialYear.save();
-  return financialYear;
+	var currentFY = await createFinancialYear({
+		date: transactionDate,
+		stcgRate: prevFY.stcgRate,
+		ltcgRate: prevFY.ltcgRate
+	}, session);
+
+	// Update reports by taking snapshot from holdings
+	// Fetch holding group by dematAccountId so the final Data Structure will be:
+	// {
+	//    dematAccountId1: {holdings: [...], openingBalance: x, closingBalance: y},
+	//    dematAccountId2: {holdings: [...], openingBalance: x, closingBalance: y},
+	// };
+	
+	const holdingsByDematAccount = await Holdings.aggregate([
+		{
+			$match: {
+				buyDate: {
+					$gte: prevFY.startDate,
+					$lte: prevFY.endDate
+				}
+			}
+		},
+		{
+			$group: {
+				_id: '$dematAccountId',
+				holdings: { $push: '$$ROOT' }
+			}
+		}
+	]).session(session);
+
+	// Build reports map
+	const reportsMap = new Map();
+	
+	for (const record of holdingsByDematAccount) {
+		const dematAccountId = record._id.toString();
+		const holdings = record.holdings;
+		
+		// Get previous FY closing balance for this demat account
+		const prevReports = prevFY.reports.get(dematAccountId);
+		const openingBalance = prevReports ? prevReports.closingBalance : 0;
+		
+		// Calculate closing balance (opening + current holdings value)
+		const closingBalance = holdings.reduce((sum, holding) => {
+			return sum + (holding.quantity * holding.price);
+		}, openingBalance);
+		
+		reportsMap.set(dematAccountId, {
+			holdings: holdings,
+			openingBalance: openingBalance,
+			closingBalance: closingBalance
+		});
+	}
+	
+	currentFY.reports = reportsMap;
+	await currentFY.save({ session });
+	
+	return currentFY;
+};
+
+const createFinancialYear = async (data, session = null) => {
+	const { date, stcgRate, ltcgRate } = data;
+
+	const existingFinancialYear = await FinancialYear.findOne({
+		startDate: { $lte: date },
+		endDate: { $gte: date }
+	}).session(session);
+
+	if (existingFinancialYear) {
+		const error = new Error('Financial year for this date already exists');
+		error.statusCode = 409;
+		error.reasonCode = 'ALREADY_EXISTS';
+		throw error;
+	}
+
+	const year = date.getFullYear();
+	const month = date.getMonth();
+
+	const fyStartYear = month < 3 ? year - 1 : year;
+
+	const financialYear = new FinancialYear({
+		startDate: new Date(Date.UTC(fyStartYear, 3, 1, 0, 0, 0, 0)), // April 1st
+		endDate: new Date(Date.UTC(fyStartYear + 1, 2, 31, 23, 59, 59, 999)), // March 31st
+		stcgRate,
+		ltcgRate,
+		title: `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`
+	});
+
+	await financialYear.save().session(session);
+	return financialYear;
 };
 
 module.exports = {
-  getFinancialYears,
-  createFinancialYear
+	getFinancialYears,
+	createFinancialYear,
+	findOrCreateFinancialYear
 };

@@ -10,7 +10,7 @@ const deliveryTypes = ['Delivery', 'Intraday'];
 
 // Validation rules
 const transactionValidation = [
-  body('date')
+  body('*.date')
     .notEmpty()
     .withMessage('Transaction date is required')
     .isISO8601()
@@ -21,37 +21,37 @@ const transactionValidation = [
       }
       return true;
     }),
-  body('type')
+  body('*.type')
     .notEmpty()
     .withMessage('Transaction type is required')
     .isIn(transactionTypes)
     .withMessage(`Transaction type must be one of: ${transactionTypes.join(', ')}`),
-  body('quantity')
+  body('*.quantity')
     .notEmpty()
     .withMessage('Quantity is required')
     .isInt({ min: 1 })
     .withMessage('Quantity must be a positive integer'),
-  body('price')
-    .notEmpty()
-    .withMessage('Price is required')
-    .isFloat({ min: 0.01 })
-    .withMessage('Price must be greater than 0'),
-  body('securityId')
+  // body('*.price')
+    // .notEmpty()
+    // .withMessage('Price is required')
+    // .isFloat({ min: 0.01 })
+    // .withMessage('Price must be greater than 0'),
+  body('*.securityId')
     .notEmpty()
     .withMessage('Security ID is required')
     .isMongoId()
     .withMessage('Invalid security ID'),
-  body('deliveryType')
+  body('*.deliveryType')
     .notEmpty()
     .withMessage('Delivery type is required')
     .isIn(deliveryTypes)
     .withMessage(`Delivery type must be one of: ${deliveryTypes.join(', ')}`),
-  body('dematAccountId')
+  body('*.dematAccountId')
     .notEmpty()
     .withMessage('Demat account ID is required')
     .isMongoId()
     .withMessage('Invalid demat account ID'),
-  body('referenceNumber')
+  body('*.referenceNumber')
     .optional()
     .trim()
     .isLength({ max: 100 })
@@ -100,9 +100,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/', queryValidation, transactionController.getTransactions);
-router.post('/', transactionValidation, transactionController.createTransaction);
-router.put('/:id', idValidation, transactionValidation, transactionController.updateTransaction);
-router.delete('/:id', idValidation, transactionController.deleteTransaction);
+router.get('/get-all', queryValidation, transactionController.getTransactions);
+router.post('/create', transactionValidation, transactionController.createTransaction);
+router.put('/update/:id', idValidation, transactionValidation, transactionController.updateTransaction);
+router.delete('/delete/:id', idValidation, transactionController.deleteTransaction);
 
 module.exports = router;

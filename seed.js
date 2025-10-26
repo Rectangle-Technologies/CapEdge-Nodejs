@@ -31,16 +31,7 @@ const seedData = async () => {
     });
     await adminUser.save();
 
-    // Create stock exchanges
-    const stockExchanges = [
-      { name: 'National Stock Exchange of India', code: 'NSE', country: 'India' },
-      { name: 'Bombay Stock Exchange', code: 'BSE', country: 'India' },
-      { name: 'Multi Commodity Exchange', code: 'MCX', country: 'India' },
-      { name: 'National Commodity and Derivatives Exchange', code: 'NCDEX', country: 'India' }
-    ];
-
-    await StockExchange.insertMany(stockExchanges);
-
+    // TODO: Create default financial year
     // Create financial year
     const financialYear = new FinancialYear({
       title: 'FY 2024-25',

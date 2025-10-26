@@ -62,35 +62,7 @@ const financialYearSchema = new mongoose.Schema({
 
 // Indexes
 financialYearSchema.index({ startDate: -1 });
-financialYearSchema.index({ startDate: 1, lastDate: 1 }); // For overlap checks
+financialYearSchema.index({ startDate: 1, endDate: 1 }); // For overlap checks
 
-// Validation to prevent overlapping financial years
-financialYearSchema.pre('save', async function (next) {
-  const overlap = await this.constructor.findOne({
-    _id: { $ne: this._id },
-    $or: [
-      {
-        startDate: { $lte: this.startDate },
-        lastDate: { $gte: this.startDate }
-      },
-      {
-        startDate: { $lte: this.lastDate },
-        lastDate: { $gte: this.lastDate }
-      },
-      {
-        startDate: { $gte: this.startDate },
-        lastDate: { $lte: this.lastDate }
-      }
-    ]
-  });
-
-  if (overlap) {
-    const error = new Error('Financial year dates overlap with existing financial year');
-    error.name = 'ValidationError';
-    return next(error);
-  }
-
-  next();
-});
 
 module.exports = mongoose.model('FinancialYear', financialYearSchema);

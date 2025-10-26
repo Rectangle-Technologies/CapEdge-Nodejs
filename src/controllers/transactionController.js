@@ -36,10 +36,11 @@ const createTransaction = async (req, res, next) => {
       throw error;
     }
 
-    const transaction = await transactionService.createTransaction(req.body);
+    const transaction = await transactionService.createTransactions(req.body);
     
     return ApiResponse.created(res, { transaction }, 'Transaction created successfully');
   } catch (error) {
+    console.error('Error creating transaction:', error);
     next(error);
   }
 };
