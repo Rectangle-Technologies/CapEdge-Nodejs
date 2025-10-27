@@ -24,7 +24,7 @@ const getTransactions = async (req, res, next) => {
   }
 };
 
-const createTransaction = async (req, res, next) => {
+const createTransactions = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -32,15 +32,14 @@ const createTransaction = async (req, res, next) => {
       error.statusCode = 422;
       error.reasonCode = 'BAD_REQUEST';
       error.field = errors.array()[0].path;
-      error.errors = errors.array();
       throw error;
     }
 
-    const transaction = await transactionService.createTransactions(req.body);
-    
-    return ApiResponse.created(res, { transaction }, 'Transaction created successfully');
+    const transactions = await transactionService.createTransactions(req.body);
+
+    return ApiResponse.created(res, { transactions }, 'Transactions created successfully');
   } catch (error) {
-    console.error('Error creating transaction:', error);
+    console.error('Error creating transactions:', error);
     next(error);
   }
 };
@@ -77,7 +76,7 @@ const deleteTransaction = async (req, res, next) => {
 
 module.exports = {
   getTransactions,
-  createTransaction,
+  createTransactions,
   updateTransaction,
   deleteTransaction
 };

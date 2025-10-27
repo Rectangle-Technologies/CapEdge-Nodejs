@@ -54,6 +54,11 @@ const transactionSchema = new mongoose.Schema({
     ref: 'DematAccount',
     required: [true, 'Demat account ID is required'],
     index: true
+  },
+  financialYearId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FinancialYear',
+    required: [true, 'Financial year ID is required']
   }
 }, {
   timestamps: true
@@ -62,5 +67,6 @@ const transactionSchema = new mongoose.Schema({
 // Indexes
 transactionSchema.index({ securityId: 1 });
 transactionSchema.index({ dematAccountId: 1 });
+transactionSchema.index({ financialYearId: 1 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

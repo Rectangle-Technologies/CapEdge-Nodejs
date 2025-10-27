@@ -31,11 +31,57 @@ const transactionValidation = [
     .withMessage('Quantity is required')
     .isInt({ min: 1 })
     .withMessage('Quantity must be a positive integer'),
-  // body('*.price')
-    // .notEmpty()
-    // .withMessage('Price is required')
-    // .isFloat({ min: 0.01 })
-    // .withMessage('Price must be greater than 0'),
+  body('*.price')
+    .custom((value, { req, path }) => {
+      // Extract the index from the path (e.g., "[0].price" -> 0)
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body[index]?.deliveryType;
+      
+      // Price is required only for Delivery type
+      if (deliveryType === 'Delivery') {
+        if (!value) {
+          throw new Error('Price is required for Delivery type transactions');
+        }
+        if (typeof value !== 'number' || value <= 0) {
+          throw new Error('Price must be greater than 0');
+        }
+      }
+      return true;
+    }),
+  body('*.buyPrice')
+    .custom((value, { req, path }) => {
+      // Extract the index from the path (e.g., "[0].buyPrice" -> 0)
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body[index]?.deliveryType;
+      
+      // Buy price is required only for Intraday type
+      if (deliveryType === 'Intraday') {
+        if (!value) {
+          throw new Error('Buy price is required for Intraday type transactions');
+        }
+        if (typeof value !== 'number' || value <= 0) {
+          throw new Error('Buy price must be greater than 0');
+        }
+      }
+      return true;
+    }),
+  body('*.sellPrice')
+    .custom((value, { req, path }) => {
+      // Extract the index from the path (e.g., "[0].sellPrice" -> 0)
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body[index]?.deliveryType;
+      
+      // Sell price is required only for Intraday type
+      if (deliveryType === 'Intraday') {
+        if (!value) {
+          throw new Error('Sell price is required for Intraday type transactions');
+        }
+        if (typeof value !== 'number' || value <= 0) {
+          throw new Error('Sell price must be greater than 0');
+        }
+      }
+      return true;
+    }),
   body('*.securityId')
     .notEmpty()
     .withMessage('Security ID is required')
@@ -52,10 +98,9 @@ const transactionValidation = [
     .isMongoId()
     .withMessage('Invalid demat account ID'),
   body('*.referenceNumber')
-    .optional()
+    .notEmpty()
+    .withMessage('Reference number is required')
     .trim()
-    .isLength({ max: 100 })
-    .withMessage('Reference number cannot exceed 100 characters')
 ];
 
 const idValidation = [
@@ -101,7 +146,7 @@ const queryValidation = [
 
 // Routes
 router.get('/get-all', queryValidation, transactionController.getTransactions);
-router.post('/create', transactionValidation, transactionController.createTransaction);
+router.post('/create', transactionValidation, transactionController.createTransactions);
 router.put('/update/:id', idValidation, transactionValidation, transactionController.updateTransaction);
 router.delete('/delete/:id', idValidation, transactionController.deleteTransaction);
 

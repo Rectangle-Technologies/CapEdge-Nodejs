@@ -39,17 +39,11 @@ const financialYearSchema = new mongoose.Schema({
   },
   stcgRate: {
     type: Number,
-    required: [true, 'STCG rate is required'],
-    min: [0, 'STCG rate cannot be negative'],
-    max: [100, 'STCG rate cannot exceed 100%'],
-    set: value => value / 100 // Store as decimal (e.g., 15% as 0.15)
+    required: [true, 'STCG rate is required']
   },
   ltcgRate: {
     type: Number,
-    required: [true, 'LTCG rate is required'],
-    min: [0, 'LTCG rate cannot be negative'],
-    max: [100, 'LTCG rate cannot exceed 100%'],
-    set: value => value / 100 // Store as decimal (e.g., 10% as 0.10)
+    required: [true, 'LTCG rate is required']
   },
   reports: {
     type: Map,

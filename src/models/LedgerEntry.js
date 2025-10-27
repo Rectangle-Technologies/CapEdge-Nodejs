@@ -23,20 +23,6 @@ const ledgerEntrySchema = new mongoose.Schema({
     required: [true, 'Date is required'],
     index: true
   },
-  description: {
-    type: String,
-    trim: true,
-    maxlength: [200, 'Description cannot exceed 200 characters']
-  },
-  transactionType: {
-    type: String,
-    required: [true, 'Transaction type is required'],
-    enum: ['BUY', 'SELL', 'CREDIT', 'DEBIT']
-  },
-  runningBalance: {
-    type: Number,
-    default: 0
-  }
 }, {
   timestamps: true
 });

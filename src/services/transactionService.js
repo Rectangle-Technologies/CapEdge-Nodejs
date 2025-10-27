@@ -1,4 +1,3 @@
-const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const Security = require('../models/Security');
 const DematAccount = require('../models/DematAccount');
@@ -6,6 +5,7 @@ const LedgerEntry = require('../models/LedgerEntry');
 const FinancialYear = require('../models/FinancialYear');
 const Holdings = require('../models/Holdings');
 const { findOrCreateFinancialYear } = require('./financialYearService');
+const mongoose = require('mongoose');
 
 /**
  * Create a new transaction following the specified flow
@@ -31,24 +31,26 @@ const { findOrCreateFinancialYear } = require('./financialYearService');
  */
 
 const createTransaction = async (transactionData, session) => {
-    
-
-    console.log('Creating transaction:', transactionData);
-
     const dematAccount = await DematAccount.findById(transactionData.dematAccountId).session(session);
     if (!dematAccount) {
-        throw new Error('Demat account not found');
+        const error = new Error('Demat account not found');
+        error.statusCode = 404;
+        error.reasonCode = 'NOT_FOUND';
+        throw error;
     }
 
     const security = await Security.findById(transactionData.securityId).session(session);
     if (!security) {
-        throw new Error('Security not found');
+        const error = new Error('Security not found');
+        error.statusCode = 404;
+        error.reasonCode = 'NOT_FOUND';
+        throw error;
     }
 
     const transactionDate = new Date(transactionData.date);
-    const financialYear = await findOrCreateFinancialYear(transactionDate, dematAccount._id, session);
+    const financialYear = await findOrCreateFinancialYear(transactionDate, session);
 
-    console.log('Using Financial Year:', financialYear);
+    const result = [];
 
     // Check delivery type
     if (transactionData.deliveryType === 'Intraday') {
@@ -62,7 +64,8 @@ const createTransaction = async (transactionData, session) => {
             securityId: transactionData.securityId,
             deliveryType: 'Intraday',
             dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || ''
+            referenceNumber: transactionData.referenceNumber || '',
+            financialYearId: financialYear._id
         }], { session });
 
         const sellTransaction = await Transaction.create([{
@@ -73,12 +76,24 @@ const createTransaction = async (transactionData, session) => {
             securityId: transactionData.securityId,
             deliveryType: 'Intraday',
             dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || ''
+            referenceNumber: transactionData.referenceNumber || '',
+            financialYearId: financialYear._id
         }], { session });
 
         // TODO: Ledger entries update for intraday can be added here
-        await buyTransaction[0].save({ session });
-        await sellTransaction[0].save({ session });
+        await LedgerEntry.create([{
+            dematAccountId: transactionData.dematAccountId,
+            tradeTransactionId: buyTransaction[0]._id,
+            transactionAmount: -transactionData.buyPrice * transactionData.quantity,
+            date: transactionDate
+        }, {
+            dematAccountId: transactionData.dematAccountId,
+            tradeTransactionId: sellTransaction[0]._id,
+            transactionAmount: transactionData.sellPrice * transactionData.quantity,
+            date: transactionDate
+        }], { session });
+
+        result.push(buyTransaction[0], sellTransaction[0]);
 
     } else if (transactionData.deliveryType === 'Delivery') {
         // Create main transaction record
@@ -90,152 +105,51 @@ const createTransaction = async (transactionData, session) => {
             securityId: transactionData.securityId,
             deliveryType: 'Delivery',
             dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || ''
+            referenceNumber: transactionData.referenceNumber || '',
+            financialYearId: financialYear._id
         }], { session });
-        await transaction[0].save({ session });
+
+        // Add entry in ledger
+        await LedgerEntry.create([{
+            dematAccountId: transactionData.dematAccountId,
+            tradeTransactionId: transaction[0]._id,
+            transactionAmount: (transactionData.type === 'BUY' ? -1 : 1) * transactionData.price * transactionData.quantity,
+            date: transactionDate
+        }], { session });
+
+        result.push(transaction[0]);
     }
+
+    return result;
 };
 
 const createTransactions = async (transactions) => {
     const session = await mongoose.startSession();
-    session.startTransaction();
-    for (const txData of transactions) {
-        await createTransaction(txData, session);
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // Generate Reports 
-}
-
-/**
- * Match holdings for SELL transaction using FIFO method
- * @private
- */
-const matchAndSellHoldings = async (
-    dematAccountId,
-    securityId,
-    quantity,
-    price,
-    symbol,
-    transactionId,
-    transactionDate,
-    financialYearId,
-    session
-) => {
-    let remainingQty = quantity;
-    const matchedHoldings = [];
-    const ledgerEntries = [];
-
-    // Get holdings in FIFO order (oldest first)
-    const availableHoldings = await Holdings.find({
-        dematAccountId: dematAccountId,
-        securityId: securityId,
-        quantity: { $gt: 0 } // Only positive quantities
-    })
-        .sort({ buyDate: 1 })
-        .session(session);
-
-    if (availableHoldings.length === 0) {
-        throw new Error(`No available holdings for ${symbol} in this demat account`);
-    }
-
-    let totalCostPrice = 0;
-    let totalSalePrice = quantity * price;
-
-    // Match holdings
-    for (const holding of availableHoldings) {
-        if (remainingQty <= 0) break;
-
-        const sellQty = Math.min(remainingQty, holding.quantity);
-        const costPrice = holding.price * sellQty;
-        totalCostPrice += costPrice;
-
-        // Calculate holding period for tax
-        const holdingDays = Math.floor((transactionDate - holding.buyDate) / (1000 * 60 * 60 * 24));
-        const isLongTermHolding = holdingDays >= 365;
-
-        // Update holding record
-        holding.quantity -= sellQty;
-        await holding.save({ session });
-
-        matchedHoldings.push({
-            holdingId: holding._id,
-            soldQuantity: sellQty,
-            buyPrice: holding.price,
-            sellPrice: price,
-            costPrice: costPrice,
-            profitLoss: (price - holding.price) * sellQty,
-            isLongTermHolding: isLongTermHolding
+    const result = [];
+    
+    try {
+        session.startTransaction({
+            readConcern: { level: 'snapshot' },
+            writeConcern: { w: 'majority' },
+            readPreference: 'primary'
         });
+        
+        for (const txData of transactions) {
+            const txResult = await createTransaction(txData, session);
+            result.push(...txResult);
+        }
+        
+        await session.commitTransaction();
+        
+        // Generate Reports (outside transaction or in separate transaction)
 
-        // Create ledger entry for each matched holding
-        const ledgerEntry = await LedgerEntry.create(
-            [{
-                dematAccountId: dematAccountId,
-                tradeTransactionId: transactionId,
-                transactionAmount: price * sellQty,
-                date: transactionDate,
-                description: `SELL ${symbol} - ${sellQty} units @ ${price} (Bought @ ${holding.price}, Hold: ${holdingDays} days)`,
-                transactionType: 'SELL',
-                runningBalance: 0 // Will be calculated during FY update
-            }],
-            { session }
-        );
-
-        ledgerEntries.push(ledgerEntry[0]);
-
-        remainingQty -= sellQty;
+        return result;
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
     }
-
-    if (remainingQty > 0) {
-        throw new Error(`Insufficient holdings. Available: ${quantity - remainingQty}, Requested: ${quantity}`);
-    }
-
-    return {
-        matched: matchedHoldings,
-        ledgerEntries: ledgerEntries,
-        profitLoss: totalSalePrice - totalCostPrice
-    };
-};
-
-/**
- * Update Financial Year with latest transactions and balances
- * @private
- */
-const updateFinancialYearBalances = async (
-    financialYearId,
-    dematAccountId,
-    transaction,
-    session
-) => {
-    const financialYear = await FinancialYear.findById(financialYearId).session(session);
-
-    if (!financialYear) {
-        throw new Error('Financial year not found');
-    }
-
-    const dematAccountIdStr = dematAccountId.toString();
-    const currentReport = financialYear.reports.get(dematAccountIdStr) || {
-        holdings: [],
-        openingBalance: 0,
-        closingBalance: 0
-    };
-
-    // Update closing balance
-    const dematAccount = await DematAccount.findById(dematAccountId).session(session);
-    currentReport.closingBalance = dematAccount.balance;
-
-    // Get latest holdings
-    const latestHoldings = await Holdings.find({
-        dematAccountId: dematAccountId
-    }).session(session);
-
-    currentReport.holdings = latestHoldings;
-
-    financialYear.reports.set(dematAccountIdStr, currentReport);
-    await financialYear.save({ session });
 };
 
 module.exports = {

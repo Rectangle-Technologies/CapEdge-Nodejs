@@ -27,7 +27,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	let financialYear = await FinancialYear.findOne({
 		startDate: { $lte: transactionDate },
 		endDate: { $gte: transactionDate }
-	});
+	}).session(session);
 
 	if (!!financialYear) {
 		return financialYear;
@@ -42,7 +42,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	}).session(session);
 
 	if (!prevFY) {
-		const error = new Error('Financial year for this date does not exist');
+		const error = new Error('Previous Financial year for this date does not exist');
 		error.statusCode = 404;
 		error.reasonCode = 'NOT_FOUND';
 		throw error;
@@ -61,7 +61,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	//    dematAccountId2: {holdings: [...], openingBalance: x, closingBalance: y},
 	// };
 	
-	const holdingsByDematAccount = await Holdings.aggregate([
+	const aggregationPipeline = [
 		{
 			$match: {
 				buyDate: {
@@ -76,7 +76,9 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 				holdings: { $push: '$$ROOT' }
 			}
 		}
-	]).session(session);
+	];
+
+	const holdingsByDematAccount = await Holdings.aggregate(aggregationPipeline).session(session);
 
 	// Build reports map
 	const reportsMap = new Map();
@@ -134,8 +136,8 @@ const createFinancialYear = async (data, session = null) => {
 		ltcgRate,
 		title: `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`
 	});
+	await financialYear.save({ session });
 
-	await financialYear.save().session(session);
 	return financialYear;
 };
 
