@@ -30,97 +30,93 @@ const mongoose = require('mongoose');
  * @returns {Promise<Object>} - Created transaction with related records
  */
 
-const createTransaction = async (transactionData, session) => {
-    const dematAccount = await DematAccount.findById(transactionData.dematAccountId).session(session);
-    if (!dematAccount) {
-        const error = new Error('Demat account not found');
-        error.statusCode = 404;
-        error.reasonCode = 'NOT_FOUND';
-        throw error;
-    }
+const throwNotFoundError = (message) => {
+    const error = new Error(message);
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+};
 
-    const security = await Security.findById(transactionData.securityId).session(session);
-    if (!security) {
-        const error = new Error('Security not found');
-        error.statusCode = 404;
-        error.reasonCode = 'NOT_FOUND';
-        throw error;
-    }
+const validateTransaction = async (transactionData, session) => {
+    const [dematAccount, security] = await Promise.all([
+        DematAccount.findById(transactionData.dematAccountId).session(session),
+        Security.findById(transactionData.securityId).session(session)
+    ]);
+
+    if (!dematAccount) throwNotFoundError('Demat account not found');
+    if (!security) throwNotFoundError('Security not found');
+};
+
+const handleIntradayTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
+    const [buyTransaction, sellTransaction] = await Transaction.create([
+        {
+            ...baseTransaction,
+            type: 'BUY',
+            quantity: transactionData.quantity,
+            price: transactionData.buyPrice
+        },
+        {
+            ...baseTransaction,
+            type: 'SELL',
+            quantity: transactionData.quantity,
+            price: transactionData.sellPrice
+        }
+    ], { session });
+
+    await LedgerEntry.create([
+        {
+            dematAccountId: transactionData.dematAccountId,
+            tradeTransactionId: buyTransaction._id,
+            transactionAmount: -transactionData.buyPrice * transactionData.quantity,
+            date: transactionDate
+        },
+        {
+            dematAccountId: transactionData.dematAccountId,
+            tradeTransactionId: sellTransaction._id,
+            transactionAmount: transactionData.sellPrice * transactionData.quantity,
+            date: transactionDate
+        }
+    ], { session });
+
+    return [buyTransaction, sellTransaction];
+};
+
+const handleDeliveryTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
+    const [transaction] = await Transaction.create([{
+        ...baseTransaction,
+        type: transactionData.type,
+        quantity: transactionData.quantity,
+        price: transactionData.price
+    }], { session });
+
+    await LedgerEntry.create([{
+        dematAccountId: transactionData.dematAccountId,
+        tradeTransactionId: transaction._id,
+        transactionAmount: (transactionData.type === 'BUY' ? -1 : 1) * transactionData.price * transactionData.quantity,
+        date: transactionDate
+    }], { session });
+
+    return [transaction];
+};
+
+const createTransaction = async (transactionData, session) => {
+    await validateTransaction(transactionData, session);
 
     const transactionDate = new Date(transactionData.date);
     const financialYear = await findOrCreateFinancialYear(transactionDate, session);
 
-    const result = [];
+    const baseTransaction = {
+        date: transactionDate,
+        securityId: transactionData.securityId,
+        deliveryType: transactionData.deliveryType,
+        dematAccountId: transactionData.dematAccountId,
+        referenceNumber: transactionData.referenceNumber || '',
+        financialYearId: financialYear._id
+    };
 
-    // Check delivery type
-    if (transactionData.deliveryType === 'Intraday') {
-        // Add two transaction entries: BUY and SELL
-        // For simplicity, assuming quantity is positive for BUY and negative for SELL
-        const buyTransaction = await Transaction.create([{
-            date: transactionDate,
-            type: 'BUY',
-            quantity: transactionData.quantity,
-            price: transactionData.buyPrice,
-            securityId: transactionData.securityId,
-            deliveryType: 'Intraday',
-            dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || '',
-            financialYearId: financialYear._id
-        }], { session });
-
-        const sellTransaction = await Transaction.create([{
-            date: transactionDate,
-            type: 'SELL',
-            quantity: transactionData.quantity,
-            price: transactionData.sellPrice,
-            securityId: transactionData.securityId,
-            deliveryType: 'Intraday',
-            dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || '',
-            financialYearId: financialYear._id
-        }], { session });
-
-        // TODO: Ledger entries update for intraday can be added here
-        await LedgerEntry.create([{
-            dematAccountId: transactionData.dematAccountId,
-            tradeTransactionId: buyTransaction[0]._id,
-            transactionAmount: -transactionData.buyPrice * transactionData.quantity,
-            date: transactionDate
-        }, {
-            dematAccountId: transactionData.dematAccountId,
-            tradeTransactionId: sellTransaction[0]._id,
-            transactionAmount: transactionData.sellPrice * transactionData.quantity,
-            date: transactionDate
-        }], { session });
-
-        result.push(buyTransaction[0], sellTransaction[0]);
-
-    } else if (transactionData.deliveryType === 'Delivery') {
-        // Create main transaction record
-        const transaction = await Transaction.create([{
-            date: transactionDate,
-            type: transactionData.type,
-            quantity: transactionData.quantity,
-            price: transactionData.price,
-            securityId: transactionData.securityId,
-            deliveryType: 'Delivery',
-            dematAccountId: transactionData.dematAccountId,
-            referenceNumber: transactionData.referenceNumber || '',
-            financialYearId: financialYear._id
-        }], { session });
-
-        // Add entry in ledger
-        await LedgerEntry.create([{
-            dematAccountId: transactionData.dematAccountId,
-            tradeTransactionId: transaction[0]._id,
-            transactionAmount: (transactionData.type === 'BUY' ? -1 : 1) * transactionData.price * transactionData.quantity,
-            date: transactionDate
-        }], { session });
-
-        result.push(transaction[0]);
-    }
-
-    return result;
+    return transactionData.deliveryType === 'Intraday'
+        ? await handleIntradayTransaction(transactionData, baseTransaction, transactionDate, session)
+        : await handleDeliveryTransaction(transactionData, baseTransaction, transactionDate, session);
 };
 
 const createTransactions = async (transactions) => {
@@ -148,7 +144,7 @@ const createTransactions = async (transactions) => {
         await session.abortTransaction();
         throw error;
     } finally {
-        session.endSession();
+        await session.endSession();
     }
 };
 
