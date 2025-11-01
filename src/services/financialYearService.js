@@ -150,6 +150,8 @@ const updateFinancialYear = async (id, data) => {
 		throw error;
 	}
 
+	financialYear.startDate = new Date(Date.UTC(data.startDate.getFullYear(), data.startDate.getMonth(), data.startDate.getDate(), 0, 0, 0, 0));
+	financialYear.endDate = new Date(Date.UTC(data.endDate.getFullYear(), data.endDate.getMonth(), data.endDate.getDate(), 23, 59, 59, 999));
 	financialYear.stcgRate = data.stcgRate / 100;
 	financialYear.ltcgRate = data.ltcgRate / 100;
 
