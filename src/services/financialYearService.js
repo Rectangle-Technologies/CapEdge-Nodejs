@@ -53,13 +53,6 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 		stcgRate: prevFY.stcgRate,
 		ltcgRate: prevFY.ltcgRate
 	}, session);
-
-	// Update reports by taking snapshot from holdings
-	// Fetch holding group by dematAccountId so the final Data Structure will be:
-	// {
-	//    dematAccountId1: {holdings: [...], openingBalance: x, closingBalance: y},
-	//    dematAccountId2: {holdings: [...], openingBalance: x, closingBalance: y},
-	// };
 	
 	const aggregationPipeline = [
 		{

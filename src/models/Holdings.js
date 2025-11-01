@@ -36,6 +36,12 @@ const holdingsSchema = new mongoose.Schema({
     ref: 'DematAccount',
     required: [true, 'Demat account ID is required'],
     index: true
+  },
+  financialYearId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FinancialYear',
+    required: [true, 'Financial year ID is required'],
+    index: true
   }
 }, {
   timestamps: true

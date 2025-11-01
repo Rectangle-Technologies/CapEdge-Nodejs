@@ -53,14 +53,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging
-app.use((req, res, next) => {
-  process.env.NODE_ENV === 'development' &&
-  logger.info(`${req.method} ${req.url}`, {
-    ip: req.ip,
-    userAgent: req.get('User-Agent')
-  });
-  next();
-});
+// app.use((req, res, next) => {
+//   process.env.NODE_ENV === 'development' &&
+//   logger.info(`${req.method} ${req.url}`, {
+//     ip: req.ip,
+//     userAgent: req.get('User-Agent')
+//   });
+//   next();
+// });
 
 // Health check endpoint
 app.get('/health', (req, res) => {

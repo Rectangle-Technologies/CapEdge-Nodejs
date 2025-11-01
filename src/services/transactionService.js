@@ -6,6 +6,7 @@ const FinancialYear = require('../models/FinancialYear');
 const Holdings = require('../models/Holdings');
 const { findOrCreateFinancialYear } = require('./financialYearService');
 const mongoose = require('mongoose');
+const { updateRecords } = require('./recordService');
 
 /**
  * Create a new transaction following the specified flow
@@ -129,21 +130,34 @@ const createTransactions = async (transactions) => {
             writeConcern: { w: 'majority' },
             readPreference: 'primary'
         });
+
+        console.log('Transaction session started.');
         
         for (const txData of transactions) {
             const txResult = await createTransaction(txData, session);
             result.push(...txResult);
         }
+
+        console.log('All transactions processed successfully.');
         
+        await updateRecords(result, session);
+
+        console.log('Records updated successfully.');
+
         await session.commitTransaction();
-        
-        // Generate Reports (outside transaction or in separate transaction)
+
+        console.log('Transaction committed successfully.');
 
         return result;
     } catch (error) {
-        await session.abortTransaction();
+        console.error('Error in createTransactions:', error);
+        console.error('Aborting transaction due to error.');
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
+        console.log('Ending session.');
         await session.endSession();
     }
 };
