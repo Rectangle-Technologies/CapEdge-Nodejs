@@ -1,6 +1,5 @@
 const { body } = require('express-validator');
 const financialYearController = require('../controllers/financialYearController');
-const authMiddleware = require('../middleware/auth');
 
 const router = require('express').Router();
 
@@ -16,8 +15,19 @@ const financialYearValidation = [
         .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100')
 ]
 
-router.get('/get-all', authMiddleware, financialYearController.getFinancialYears);
+const financialYearUpdateValidation = [
+    body('stcgRate')
+        .notEmpty().withMessage('STCG rate is required')
+        .isFloat({ min: 0, max: 100 }).withMessage('STCG rate must be between 0 and 100'),
+    body('ltcgRate')
+        .notEmpty().withMessage('LTCG rate is required')
+        .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100')
+]
+
+router.get('/get-all', financialYearController.getFinancialYears);
 // TODO: Remove once transactions are done
-router.post('/create', authMiddleware, financialYearValidation, financialYearController.createFinancialYear);
+router.post('/create', financialYearValidation, financialYearController.createFinancialYear);
+
+router.put('/update/:id', financialYearUpdateValidation, financialYearController.updateFinancialYear);
 
 module.exports = router;

@@ -33,7 +33,27 @@ const createFinancialYear = async (req, res, next) => {
   }
 };
 
+const updateFinancialYear = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const error = new Error(errors.array()[0].msg);
+      error.statusCode = 422;
+      error.reasonCode = 'BAD_REQUEST';
+      error.field = errors.array()[0].path;
+      throw error;
+    }
+
+    const financialYear = await financialYearService.updateFinancialYear(req.params.id, req.body);
+
+    return ApiResponse.success(res, { financialYear }, 'Financial year updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getFinancialYears,
-  createFinancialYear
+  createFinancialYear,
+  updateFinancialYear
 };

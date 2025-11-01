@@ -109,7 +109,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	return currentFY;
 };
 
-const createFinancialYear = async (data, session = null) => {
+const  createFinancialYear = async (data, session = null) => {
 	const { date, stcgRate, ltcgRate } = data;
 
 	const existingFinancialYear = await FinancialYear.findOne({
@@ -141,8 +141,25 @@ const createFinancialYear = async (data, session = null) => {
 	return financialYear;
 };
 
+const updateFinancialYear = async (id, data) => {
+	const financialYear = await FinancialYear.findById(id);
+	if (!financialYear) {
+		const error = new Error('Financial year not found');
+		error.statusCode = 404;
+		error.reasonCode = 'NOT_FOUND';
+		throw error;
+	}
+
+	financialYear.stcgRate = data.stcgRate / 100;
+	financialYear.ltcgRate = data.ltcgRate / 100;
+
+	await financialYear.save();
+	return financialYear;
+};
+
 module.exports = {
 	getFinancialYears,
 	createFinancialYear,
-	findOrCreateFinancialYear
+	findOrCreateFinancialYear,
+	updateFinancialYear
 };
