@@ -13,7 +13,6 @@ const handleValidationErrors = (req, res, next) => {
         error.statusCode = 422;
         error.reasonCode = 'VALIDATION_ERROR';
         error.field = firstError.path;
-        error.errors = errors.array(); // Include all errors for debugging
         return next(error);
     }
     
