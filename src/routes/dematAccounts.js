@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const dematAccountController = require('../controllers/dematAccountController');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -49,9 +50,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/get-all', queryValidation, dematAccountController.getDematAccounts);
-router.post('/create', dematAccountValidation, dematAccountController.createDematAccount);
-router.put('/update/:id', idValidation, dematAccountValidation, dematAccountController.updateDematAccount);
-router.delete('/delete/:id', idValidation, dematAccountController.deleteDematAccount);
+router.get('/get-all', queryValidation, handleValidationErrors, dematAccountController.getDematAccounts);
+router.post('/create', dematAccountValidation, handleValidationErrors, dematAccountController.createDematAccount);
+router.put('/update/:id', idValidation, dematAccountValidation, handleValidationErrors, dematAccountController.updateDematAccount);
+router.delete('/delete/:id', idValidation, handleValidationErrors, dematAccountController.deleteDematAccount);
 
 module.exports = router;

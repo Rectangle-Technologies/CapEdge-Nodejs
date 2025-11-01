@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const userAccountService = require('../services/userAccountService');
 const ApiResponse = require('../utils/response');
 
@@ -26,15 +25,6 @@ const getUserAccounts = async (req, res, next) => {
 
 const createUserAccount = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const userAccount = await userAccountService.createUserAccount(req.body);
     
     return ApiResponse.created(res, { userAccount }, 'User account created successfully');
@@ -45,15 +35,6 @@ const createUserAccount = async (req, res, next) => {
 
 const updateUserAccount = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const userAccount = await userAccountService.updateUserAccount(req.params.id, req.body);
     
     return ApiResponse.success(res, { userAccount }, 'User account updated successfully');

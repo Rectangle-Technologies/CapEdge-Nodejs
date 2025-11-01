@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param, query } = require('express-validator');
 const securityController = require('../controllers/securityController');
 const { SECURITY_TYPES_ARRAY } = require('../constants');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -50,10 +51,10 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/get-all', queryValidation, securityController.getSecurities);
-router.post('/create', securityValidation, securityController.createSecurity);
+router.get('/get-all', queryValidation, handleValidationErrors, securityController.getSecurities);
+router.post('/create', securityValidation, handleValidationErrors, securityController.createSecurity);
 router.post('/bulk-create', securityController.bulkCreateSecurities);
-router.put('/update/:id', idValidation, securityValidation, securityController.updateSecurity);
-router.delete('/delete/:id', idValidation, securityController.deleteSecurity);
+router.put('/update/:id', idValidation, securityValidation, handleValidationErrors, securityController.updateSecurity);
+router.delete('/delete/:id', idValidation, handleValidationErrors, securityController.deleteSecurity);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const brokerController = require('../controllers/brokerController');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -40,9 +41,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/get-all', queryValidation, brokerController.getBrokers);
-router.post('/create', brokerValidation, brokerController.createBroker);
-router.put('/update/:id', idValidation, brokerValidation, brokerController.updateBroker);
-router.delete('/delete/:id', idValidation, brokerController.deleteBroker);
+router.get('/get-all', queryValidation, handleValidationErrors, brokerController.getBrokers);
+router.post('/create', brokerValidation, handleValidationErrors, brokerController.createBroker);
+router.put('/update/:id', idValidation, brokerValidation, handleValidationErrors, brokerController.updateBroker);
+router.delete('/delete/:id', idValidation, handleValidationErrors, brokerController.deleteBroker);
 
 module.exports = router;

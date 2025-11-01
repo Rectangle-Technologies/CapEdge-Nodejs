@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const transactionService = require('../services/transactionService');
 const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
@@ -26,15 +25,6 @@ const getTransactions = async (req, res, next) => {
 
 const createTransactions = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const transactions = await transactionService.createTransactions(req.body);
 
     return ApiResponse.created(res, { transactions }, 'Transactions created successfully');
@@ -46,16 +36,6 @@ const createTransactions = async (req, res, next) => {
 
 const updateTransaction = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      error.errors = errors.array();
-      throw error;
-    }
-
     const transaction = await transactionService.updateTransaction(req.params.id, req.body);
     
     return ApiResponse.success(res, { transaction }, 'Transaction updated successfully');

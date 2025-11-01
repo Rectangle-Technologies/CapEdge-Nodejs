@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const userAccountController = require('../controllers/userAccountController');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -44,9 +45,9 @@ const queryValidation = [
 ];
 
 // Routes
-router.get('/get-all', queryValidation, userAccountController.getUserAccounts);
-router.post('/create', userAccountValidation, userAccountController.createUserAccount);
-router.put('/update/:id', idValidation, userAccountValidation, userAccountController.updateUserAccount);
-router.delete('/delete/:id', idValidation, userAccountController.deleteUserAccount);
+router.get('/get-all', queryValidation, handleValidationErrors, userAccountController.getUserAccounts);
+router.post('/create', userAccountValidation, handleValidationErrors, userAccountController.createUserAccount);
+router.put('/update/:id', idValidation, userAccountValidation, handleValidationErrors, userAccountController.updateUserAccount);
+router.delete('/delete/:id', idValidation, handleValidationErrors, userAccountController.deleteUserAccount);
 
 module.exports = router;

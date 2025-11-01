@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const dematAccountService = require('../services/dematAccountService');
 const ApiResponse = require('../utils/response');
 
@@ -27,15 +26,6 @@ const getDematAccounts = async (req, res, next) => {
 
 const createDematAccount = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const dematAccount = await dematAccountService.createDematAccount(req.body);
     
     return ApiResponse.created(res, { dematAccount }, 'Demat account created successfully');
@@ -46,15 +36,6 @@ const createDematAccount = async (req, res, next) => {
 
 const updateDematAccount = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const dematAccount = await dematAccountService.updateDematAccount(req.params.id, req.body);
     
     return ApiResponse.success(res, { dematAccount }, 'Demat account updated successfully');

@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const authService = require('../services/authService');
 const ApiResponse = require('../utils/response');
 
@@ -10,17 +9,6 @@ const ApiResponse = require('../utils/response');
  */
 const login = async (req, res, next) => {
   try {
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      error.errors = errors.array();
-      throw error;
-    }
-
     const result = await authService.login(req.body);
 
     return ApiResponse.success(res, result, 'Login successful');

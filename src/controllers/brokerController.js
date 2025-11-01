@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const brokerService = require('../services/brokerService');
 const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
@@ -27,15 +26,6 @@ const getBrokers = async (req, res, next) => {
  */
 const createBroker = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const broker = await brokerService.createBroker(req.body);
 
     return ApiResponse.created(res, { broker }, 'Broker created successfully');
@@ -50,15 +40,6 @@ const createBroker = async (req, res, next) => {
  */
 const updateBroker = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const broker = await brokerService.updateBroker(req.params.id, req.body);
 
     return ApiResponse.success(res, { broker }, 'Broker updated successfully');

@@ -1,5 +1,6 @@
 const { body } = require('express-validator');
 const financialYearController = require('../controllers/financialYearController');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = require('express').Router();
 
@@ -26,8 +27,8 @@ const financialYearUpdateValidation = [
 
 router.get('/get-all', financialYearController.getFinancialYears);
 // TODO: Remove once transactions are done
-router.post('/create', financialYearValidation, financialYearController.createFinancialYear);
+router.post('/create', financialYearValidation, handleValidationErrors, financialYearController.createFinancialYear);
 
-router.put('/update/:id', financialYearUpdateValidation, financialYearController.updateFinancialYear);
+router.put('/update/:id', financialYearUpdateValidation, handleValidationErrors, financialYearController.updateFinancialYear);
 
 module.exports = router;

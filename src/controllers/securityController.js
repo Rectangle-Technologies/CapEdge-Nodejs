@@ -1,4 +1,3 @@
-const { validationResult } = require('express-validator');
 const securityService = require('../services/securityService');
 const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
@@ -22,15 +21,6 @@ const getSecurities = async (req, res, next) => {
 
 const createSecurity = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const security = await securityService.createSecurity(req.body);
     
     return ApiResponse.created(res, { security }, 'Security created successfully');
@@ -41,16 +31,6 @@ const createSecurity = async (req, res, next) => {
 
 const bulkCreateSecurities = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      error.errors = errors.array();
-      throw error;
-    }
-
     // Validate that body is an array
     if (!Array.isArray(req.body)) {
       const error = new Error('Request body must be an array of securities');
@@ -81,15 +61,6 @@ const bulkCreateSecurities = async (req, res, next) => {
 
 const updateSecurity = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      const error = new Error(errors.array()[0].msg);
-      error.statusCode = 422;
-      error.reasonCode = 'BAD_REQUEST';
-      error.field = errors.array()[0].path;
-      throw error;
-    }
-
     const security = await securityService.updateSecurity(req.params.id, req.body);
     
     return ApiResponse.success(res, { security }, 'Security updated successfully');

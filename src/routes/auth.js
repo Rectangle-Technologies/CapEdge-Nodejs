@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ const loginValidation = [
 ];
 
 // Routes
-router.post('/login', loginLimiter, loginValidation, authController.login);
+router.post('/login', loginLimiter, loginValidation, handleValidationErrors, authController.login);
 router.post('/validate-token', authMiddleware, authController.validateToken);
 
 module.exports = router;
