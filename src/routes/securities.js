@@ -47,7 +47,12 @@ const queryValidation = [
   query('type')
     .optional()
     .isIn(SECURITY_TYPES_ARRAY)
-    .withMessage(`Type must be one of: ${SECURITY_TYPES_ARRAY.join(', ')}`)
+    .withMessage(`Type must be one of: ${SECURITY_TYPES_ARRAY.join(', ')}`),
+  query('search')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 200 })
+    .withMessage('Search term must be between 1 and 200 characters')
 ];
 
 // Routes

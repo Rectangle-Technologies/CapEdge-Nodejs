@@ -6,6 +6,7 @@ const getSecurities = async (req, res, next) => {
   try {
     const filters = {
       name: req.query.name,
+      search: req.query.search,
       type: req.query.type,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
