@@ -1,28 +1,24 @@
 const FinancialYear = require("../models/FinancialYear");
 const Holdings = require("../models/Holdings");
 const Transaction = require("../models/Transaction");
+const DematAccount = require("../models/DematAccount");
 const logger = require("../utils/logger");
 
 const updateRecords = async (transactions, session) => {
-    if (process.env.ENV != 'production') {
-        console.log('Updating Records for Transactions:', transactions.length);
-        console.log('Transaction Details:', transactions);
-    }
     for (let transaction of transactions) {
+        if (transaction.deliveryType === 'Intraday') {
+            continue; // Skip intraday transactions
+        }
         try {
             // Fetch the previous financial year
+            console.log("------------------------------------Transaction------------------------------------");
+            console.log("Processing transaction:", transaction);
             const previousTransactionDate = new Date(transaction.date);
             previousTransactionDate.setFullYear(previousTransactionDate.getFullYear() - 1);
             const previousFinancialYear = await FinancialYear.findOne({
                 startDate: { $lte: previousTransactionDate },
                 endDate: { $gte: previousTransactionDate }
             }).session(session);
-
-            if (process.env.ENV != 'production') {
-                console.log('Previous Financial Year:', previousFinancialYear);
-                console.log('Transaction Date:', transaction.date);
-                console.log('Previous Transaction Date:', previousTransactionDate);
-            }
 
             if (!previousFinancialYear) {
                 const error = new Error('Previous Financial year for this transaction does not exist');
@@ -40,11 +36,11 @@ const updateRecords = async (transactions, session) => {
                 endDate: { $gte: transaction.date }
             }).session(session);
 
-            if (process.env.ENV != 'production') {
-                console.log('Financial Years to Update:', financialYearsToUpdate);
-            }
-
+            console.log(financialYearsToUpdate);
+            
             for (let financialYear of financialYearsToUpdate) {
+                console.log("--------------------------------Financial Years to Update------------------------------------");
+                console.log("Updating Financial Year:", financialYear.title);
                 // Fetch transactions for the FY
                 const fyTransactions = await Transaction.find({
                     dematAccountId: transaction.dematAccountId,
@@ -56,16 +52,17 @@ const updateRecords = async (transactions, session) => {
                 let closingBalance = openingBalance;
                 const holdings = previousHoldings || [];
 
+                console.log("FY Transactions:", fyTransactions);
+
                 // Loop over transactions to update holdings and balances
                 for (let fyTransaction of fyTransactions) {
-                    if (process.env.ENV != 'production') {
-                        logger.info('-----------------------------------');
-                        logger.info('Processing Transaction:', fyTransaction._id);
-                        logger.info('Holdings before transaction:', holdings);
-                        logger.info('Opening Balance before transaction:', openingBalance);
-                        logger.info('Closing Balance before transaction:', closingBalance);
+                    console.log("--------------------------------FY Transaction------------------------------------");
+                    console.log("Processing FY Transaction:", fyTransaction);
+                    // Skip intraday transactions
+                    if (fyTransaction.deliveryType === 'Intraday') {
+                        console.log("Skipping intraday transaction");
+                        continue;
                     }
-
                     // Update holdings based on transaction type
                     if (fyTransaction.type === 'BUY') {
                         closingBalance += fyTransaction.quantity * fyTransaction.price;
@@ -80,15 +77,19 @@ const updateRecords = async (transactions, session) => {
                         });
                     } else if (fyTransaction.type === 'SELL') {
                         closingBalance -= fyTransaction.quantity * fyTransaction.price;
+
                         // Match with existing holdings (FIFO)
                         let quantityToSell = fyTransaction.quantity;
                         const holdingsForCurrentSecurity = holdings.filter(h => h.securityId.toString() === fyTransaction.securityId.toString());
+                        console.log("Holdings for current security before sell:", holdingsForCurrentSecurity);
                         for (let i = 0; i < holdingsForCurrentSecurity.length && quantityToSell > 0; i++) {
+                            console.log("--------------------------------Processing Holding------------------------------------");
+                            console.log("Processing Holding:", holdingsForCurrentSecurity[i]);
+                            console.log("Quantity to sell:", quantityToSell);
                             let holding = holdingsForCurrentSecurity[i];
                             if (holding.quantity <= quantityToSell) {
                                 quantityToSell -= holding.quantity;
                                 holdings.splice(holdings.indexOf(holding), 1);
-                                i--; // Adjust index after removal
                             } else {
                                 holding.quantity -= quantityToSell;
                                 quantityToSell = 0;
@@ -105,26 +106,47 @@ const updateRecords = async (transactions, session) => {
                 }
 
                 // Update the report for the financial year
-                // financialYear.reports.set(transaction.dematAccountId.toString(), {
-                //     holdings,
-                //     openingBalance,
-                //     closingBalance 
-                // });
+                financialYear.reports.set(transaction.dematAccountId.toString(), {
+                    holdings,
+                    openingBalance,
+                    closingBalance 
+                });
 
                 latestFY = financialYear;
                 previousHoldings = holdings;
                 previousClosingBalance = closingBalance;
-
-                if (process.env.ENV != 'production') {
-                    logger.info('Updated Holdings:', holdings);
-                    logger.info('Updated Opening Balance:', openingBalance);
-                    logger.info('Updated Closing Balance:', closingBalance);
-                    logger.info('-----------------------------------');
-                }
-                // await financialYear.save({ session });
+                await financialYear.save({ session });
             }
 
-            // Fetch holdings for the previous FY
+            // Delete holdings with matching securityId and dematAccountId from DB
+            await Holdings.deleteMany({
+                securityId: transaction.securityId,
+                dematAccountId: transaction.dematAccountId
+            }).session(session);
+
+            // Re-insert updated holdings into the Holdings collection
+            const holdingsToInsert = previousHoldings.map(h => ({
+                buyDate: h.buyDate,
+                quantity: h.quantity,
+                price: h.price,
+                securityId: h.securityId,
+                transactionId: h.transactionId,
+                dematAccountId: h.dematAccountId,
+                financialYearId: latestFY._id
+            }));
+
+            // Update closing balance in demat account in DB
+            await DematAccount.updateOne(
+                { _id: transaction.dematAccountId },
+                { balance: previousClosingBalance },
+                { session }
+            );
+
+            await Holdings.insertMany(holdingsToInsert, { session });
+
+            // Clear reports map to free memory
+            latestFY.reports = new Map();
+            await latestFY.save({ session });
 
         } catch (error) {
             console.error('Error updating records for transaction:', error);

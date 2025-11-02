@@ -9,6 +9,53 @@ const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
 const logger = require("../utils/logger");
 
+const getTransactions = async (filters = {}) => {
+    const { startDate, endDate, type, securityId, dematAccountId, limit, pageNo = 1 } = filters;
+    const query = {};
+    if (startDate || endDate) {
+        query.date = {};
+        if (startDate) {
+            query.date.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            query.date.$lte = new Date(endDate);
+        }
+    }
+    if (type) {
+        query.type = type;
+    }
+    if (securityId) {
+        query.securityId = securityId;
+    }
+    if (dematAccountId) {
+        query.dematAccountId = dematAccountId;
+    }
+    const options = {
+        sort: { date: -1 },
+        skip: limit ? (pageNo - 1) * limit : 0,
+        limit: limit ? parseInt(limit) : 0
+    };
+    const total = await Transaction.countDocuments(query);
+    const transactions = await Transaction.find(query, null, options)
+        .populate('securityId')
+        .populate({
+            path: 'dematAccountId',
+            populate: {
+                path: 'brokerId'
+            }
+        })
+        .lean();
+    return {
+        transactions,
+        pagination: {
+            total,
+            count: transactions.length,
+            limit: limit ? parseInt(limit) : total,
+            pageNo: parseInt(pageNo)
+        }
+    };
+};
+
 /**
  * Create a new transaction following the specified flow
  * Flow:
@@ -50,6 +97,7 @@ const validateTransaction = async (transactionData, session) => {
 };
 
 const handleIntradayTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
+    console.log("Handling intraday transaction", transactionData);
     const [buyTransaction, sellTransaction] = await Transaction.create([
         {
             ...baseTransaction,
@@ -136,25 +184,17 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
         const session = await mongoose.startSession();
         
         try {
-            logger.info(`Transaction attempt ${attempt} of ${maxRetries}`);
-            
             session.startTransaction({
                 readConcern: { level: 'snapshot' },
                 writeConcern: { w: 'majority' },
                 readPreference: 'primary'
             });
-
-            logger.info('Transaction session started.');
-            
             // Execute the transaction logic
             const result = await transactionLogic(session);
 
             // Commit the transaction
             await session.commitTransaction();
-            logger.info('Transaction committed successfully.');
-
             return result;
-            
         } catch (error) {
             console.error(`Error in transaction attempt ${attempt}:`, error);
             
@@ -178,13 +218,13 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
                                         error.statusCode === 404 || error.reasonCode === 'NOT_FOUND';
             
             if (isBusinessLogicError) {
-                logger.info('Business logic error detected, not retrying.');
+                console.log('Business logic error detected, not retrying.');
                 throw error;
             }
             
             // Retry on transient errors or session corruption
             if ((isTransientError || isSessionCorruption) && attempt < maxRetries) {
-                logger.info(`Transient error detected, retrying with fresh session...`);
+                console.log(`Transient error detected, retrying with fresh session...`);
                 // Wait a bit before retrying (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, 100 * attempt));
                 continue;
@@ -195,7 +235,7 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
             
         } finally {
             // Always end the session to free resources
-            logger.info('Ending session.');
+            console.log('Ending session.');
             await session.endSession();
         }
     }
@@ -205,9 +245,6 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
 };
 
 const createTransactions = async (transactions) => {
-    logger.info('\n\n-----------------------------------\n\n');
-    logger.info('Starting createTransactions with', transactions.length, 'transactions.');
-    
     // Execute with retry logic
     return await executeTransactionWithRetry(async (session) => {
         const result = [];
@@ -216,17 +253,12 @@ const createTransactions = async (transactions) => {
             const txResult = await createTransaction(txData, session);
             result.push(...txResult);
         }
-
-        logger.info('All transactions processed successfully.');
-        
         await updateRecords(result, session);
-
-        logger.info('Records updated successfully.');
-        
         return result;
     });
 };
 
 module.exports = {
-    createTransactions
+    createTransactions,
+    getTransactions
 };

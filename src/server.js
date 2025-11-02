@@ -22,6 +22,7 @@ const transactionRoutes = require('./routes/transactions');
 const reportRoutes = require('./routes/reports');
 const ledgerRoutes = require('./routes/ledger');
 const financialYearRoutes = require('./routes/financialYear');
+const holdingsRoutes = require('./routes/holdings');
 
 const app = express();
 
@@ -55,7 +56,7 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging
 // app.use((req, res, next) => {
 //   process.env.NODE_ENV === 'development' &&
-//   logger.info(`${req.method} ${req.url}`, {
+//   console.log(`${req.method} ${req.url}`, {
 //     ip: req.ip,
 //     userAgent: req.get('User-Agent')
 //   });
@@ -82,6 +83,7 @@ app.use('/transaction', authMiddleware, transactionRoutes);
 app.use('/report', authMiddleware, reportRoutes);
 app.use('/ledger', authMiddleware, ledgerRoutes);
 app.use('/financial-year', authMiddleware, financialYearRoutes);
+app.use('/holdings', authMiddleware, holdingsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -111,11 +113,11 @@ const startServer = async () => {
     }
     
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
-      logger.info('Health check available at /health');
+      console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+      console.log('Health check available at /health');
       if (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost')) {
-        logger.info('💡 To fully test the API, please start MongoDB and restart the server');
-        logger.info('💡 MongoDB connection string: ' + (process.env.MONGODB_URI || 'mongodb://localhost:27017/capedge'));
+        console.log('💡 To fully test the API, please start MongoDB and restart the server');
+        console.log('💡 MongoDB connection string: ' + (process.env.MONGODB_URI || 'mongodb://localhost:27017/capedge'));
       }
     });
   } catch (error) {
@@ -126,12 +128,12 @@ const startServer = async () => {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  logger.info('Received SIGINT. Graceful shutdown...');
+  console.log('Received SIGINT. Graceful shutdown...');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM. Graceful shutdown...');
+  console.log('Received SIGTERM. Graceful shutdown...');
   process.exit(0);
 });
 
