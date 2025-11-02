@@ -7,6 +7,7 @@ const Holdings = require('../models/Holdings');
 const { findOrCreateFinancialYear } = require('./financialYearService');
 const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
+const logger = require("../utils/logger");
 
 /**
  * Create a new transaction following the specified flow
@@ -120,46 +121,110 @@ const createTransaction = async (transactionData, session) => {
         : await handleDeliveryTransaction(transactionData, baseTransaction, transactionDate, session);
 };
 
-const createTransactions = async (transactions) => {
-    const session = await mongoose.startSession();
-    const result = [];
+/**
+ * Execute transaction with retry logic for transient errors
+ * This handles MongoDB's TransientTransactionError which occurs when:
+ * - A transaction fails due to business logic and corrupts the session
+ * - Network issues or temporary MongoDB unavailability
+ * - Lock timeouts or write conflicts
+ */
+const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => {
+    let lastError;
     
-    try {
-        session.startTransaction({
-            readConcern: { level: 'snapshot' },
-            writeConcern: { w: 'majority' },
-            readPreference: 'primary'
-        });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Create a NEW session for each attempt to avoid session corruption
+        const session = await mongoose.startSession();
+        
+        try {
+            logger.info(`Transaction attempt ${attempt} of ${maxRetries}`);
+            
+            session.startTransaction({
+                readConcern: { level: 'snapshot' },
+                writeConcern: { w: 'majority' },
+                readPreference: 'primary'
+            });
 
-        console.log('Transaction session started.');
+            logger.info('Transaction session started.');
+            
+            // Execute the transaction logic
+            const result = await transactionLogic(session);
+
+            // Commit the transaction
+            await session.commitTransaction();
+            logger.info('Transaction committed successfully.');
+
+            return result;
+            
+        } catch (error) {
+            console.error(`Error in transaction attempt ${attempt}:`, error);
+            
+            // Abort the transaction if it's still active
+            if (session.inTransaction()) {
+                console.error('Aborting transaction due to error.');
+                await session.abortTransaction();
+            }
+            
+            lastError = error;
+            
+            // Check if this is a transient error that we should retry
+            const isTransientError = error.hasErrorLabel && error.hasErrorLabel('TransientTransactionError');
+            const isSessionCorruption = error.message && (
+                error.message.includes('Transaction numbers are only allowed') ||
+                error.message.includes('Given transaction number')
+            );
+            
+            // Don't retry business logic errors (like "Not enough holdings")
+            const isBusinessLogicError = error.statusCode === 405 || error.reasonCode === 'NOT_ALLOWED' ||
+                                        error.statusCode === 404 || error.reasonCode === 'NOT_FOUND';
+            
+            if (isBusinessLogicError) {
+                logger.info('Business logic error detected, not retrying.');
+                throw error;
+            }
+            
+            // Retry on transient errors or session corruption
+            if ((isTransientError || isSessionCorruption) && attempt < maxRetries) {
+                logger.info(`Transient error detected, retrying with fresh session...`);
+                // Wait a bit before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+                continue;
+            }
+            
+            // If we've exhausted retries or it's not a transient error, throw
+            throw error;
+            
+        } finally {
+            // Always end the session to free resources
+            logger.info('Ending session.');
+            await session.endSession();
+        }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError;
+};
+
+const createTransactions = async (transactions) => {
+    logger.info('\n\n-----------------------------------\n\n');
+    logger.info('Starting createTransactions with', transactions.length, 'transactions.');
+    
+    // Execute with retry logic
+    return await executeTransactionWithRetry(async (session) => {
+        const result = [];
         
         for (const txData of transactions) {
             const txResult = await createTransaction(txData, session);
             result.push(...txResult);
         }
 
-        console.log('All transactions processed successfully.');
+        logger.info('All transactions processed successfully.');
         
         await updateRecords(result, session);
 
-        console.log('Records updated successfully.');
-
-        await session.commitTransaction();
-
-        console.log('Transaction committed successfully.');
-
+        logger.info('Records updated successfully.');
+        
         return result;
-    } catch (error) {
-        console.error('Error in createTransactions:', error);
-        console.error('Aborting transaction due to error.');
-        if (session.inTransaction()) {
-            await session.abortTransaction();
-        }
-        throw error;
-    } finally {
-        console.log('Ending session.');
-        await session.endSession();
-    }
+    });
 };
 
 module.exports = {

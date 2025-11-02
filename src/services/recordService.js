@@ -4,6 +4,10 @@ const Transaction = require("../models/Transaction");
 const logger = require("../utils/logger");
 
 const updateRecords = async (transactions, session) => {
+    if (process.env.ENV != 'production') {
+        console.log('Updating Records for Transactions:', transactions.length);
+        console.log('Transaction Details:', transactions);
+    }
     for (let transaction of transactions) {
         try {
             // Fetch the previous financial year
@@ -13,6 +17,12 @@ const updateRecords = async (transactions, session) => {
                 startDate: { $lte: previousTransactionDate },
                 endDate: { $gte: previousTransactionDate }
             }).session(session);
+
+            if (process.env.ENV != 'production') {
+                console.log('Previous Financial Year:', previousFinancialYear);
+                console.log('Transaction Date:', transaction.date);
+                console.log('Previous Transaction Date:', previousTransactionDate);
+            }
 
             if (!previousFinancialYear) {
                 const error = new Error('Previous Financial year for this transaction does not exist');
@@ -30,6 +40,10 @@ const updateRecords = async (transactions, session) => {
                 endDate: { $gte: transaction.date }
             }).session(session);
 
+            if (process.env.ENV != 'production') {
+                console.log('Financial Years to Update:', financialYearsToUpdate);
+            }
+
             for (let financialYear of financialYearsToUpdate) {
                 // Fetch transactions for the FY
                 const fyTransactions = await Transaction.find({
@@ -44,11 +58,13 @@ const updateRecords = async (transactions, session) => {
 
                 // Loop over transactions to update holdings and balances
                 for (let fyTransaction of fyTransactions) {
-                    logger.info('-----------------------------------');
-                    logger.info('Processing Transaction:', fyTransaction._id);
-                    logger.info('Holdings before transaction:', holdings);
-                    logger.info('Opening Balance before transaction:', openingBalance);
-                    logger.info('Closing Balance before transaction:', closingBalance);
+                    if (process.env.ENV != 'production') {
+                        logger.info('-----------------------------------');
+                        logger.info('Processing Transaction:', fyTransaction._id);
+                        logger.info('Holdings before transaction:', holdings);
+                        logger.info('Opening Balance before transaction:', openingBalance);
+                        logger.info('Closing Balance before transaction:', closingBalance);
+                    }
 
                     // Update holdings based on transaction type
                     if (fyTransaction.type === 'BUY') {
@@ -99,10 +115,12 @@ const updateRecords = async (transactions, session) => {
                 previousHoldings = holdings;
                 previousClosingBalance = closingBalance;
 
-                logger.info('Updated Holdings:', holdings);
-                logger.info('Updated Opening Balance:', openingBalance);
-                logger.info('Updated Closing Balance:', closingBalance);
-                logger.info('-----------------------------------');
+                if (process.env.ENV != 'production') {
+                    logger.info('Updated Holdings:', holdings);
+                    logger.info('Updated Opening Balance:', openingBalance);
+                    logger.info('Updated Closing Balance:', closingBalance);
+                    logger.info('-----------------------------------');
+                }
                 // await financialYear.save({ session });
             }
 
