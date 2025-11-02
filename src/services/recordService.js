@@ -45,12 +45,12 @@ const updateRecords = async (transactions, session) => {
                 const fyTransactions = await Transaction.find({
                     dematAccountId: transaction.dematAccountId,
                     financialYearId: financialYear._id
-                }).session(session);
+                }).sort({ date: 1 }).session(session);
 
                 // Update the opening balance of the FY
                 let openingBalance = previousClosingBalance || 0;
                 let closingBalance = openingBalance;
-                const holdings = previousHoldings || [];
+                const holdings = previousHoldings.sort((a, b) => a.buyDate - b.buyDate) || [];
 
                 console.log("FY Transactions:", fyTransactions);
 

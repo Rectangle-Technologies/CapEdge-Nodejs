@@ -58,7 +58,7 @@ const getHoldings = async (filters = {}) => {
 
   // Build options for pagination
   const options = {
-    sort: { buyDate: -1 },
+    sort: { buyDate: 1 },
     skip: limit ? (pageNo - 1) * limit : 0,
     limit: limit ? parseInt(limit) : 0
   };
