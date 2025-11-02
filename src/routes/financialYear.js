@@ -17,6 +17,12 @@ const financialYearValidation = [
 ]
 
 const financialYearUpdateValidation = [
+    body('startDate')
+        .notEmpty().withMessage('Start date is required')
+        .isISO8601().toDate().withMessage('Start date must be a valid ISO 8601 date'),
+    body('endDate')
+        .notEmpty().withMessage('End date is required')
+        .isISO8601().toDate().withMessage('End date must be a valid ISO 8601 date'),
     body('stcgRate')
         .notEmpty().withMessage('STCG rate is required')
         .isFloat({ min: 0, max: 100 }).withMessage('STCG rate must be between 0 and 100'),

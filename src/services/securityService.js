@@ -9,11 +9,11 @@ const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require
 
 /**
  * Get all securities with optional filters and pagination
- * @param {Object} filters - { name, type, exchangeId, limit, pageNo }
+ * @param {Object} filters - { name, search, type, exchangeId, limit, pageNo }
  * @returns {Promise<Object>} - { securities, pagination }
  */
 const getSecurities = async (filters = {}) => {
-  const { name, type, limit, pageNo = 1 } = filters;
+  const { name, search, type, limit, pageNo = 1 } = filters;
   
   // Calculate offset from pageNo and limit
   const offset = (pageNo - 1) * limit;
@@ -23,6 +23,10 @@ const getSecurities = async (filters = {}) => {
   if (name) {
     // Match with any type of case and partial match
     query.name = { $regex: name, $options: 'i' };
+  }
+  if (search) {
+    // Search in security name (case-insensitive partial match)
+    query.name = { $regex: search, $options: 'i' };
   }
   if (type) {
     query.type = type;

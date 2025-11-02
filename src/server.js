@@ -101,6 +101,9 @@ const startServer = async () => {
   try {
     // Try to connect to MongoDB, but don't fail if it's not available
     try {
+      // Clear console for better readability
+      console.clear();
+      
       await connectDB();
     } catch (dbError) {
       logger.warn('MongoDB connection failed, starting server without database:', dbError.message);
