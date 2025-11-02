@@ -97,7 +97,7 @@ const updateRecords = async (transactions, session) => {
 
                         if (quantityToSell > 0) {
                             const error = new Error('Not enough holdings to sell for transaction: ' + fyTransaction._id);
-                            error.statusCode = 405;
+                            error.statusCode = 400;
                             error.reasonCode = 'NOT_ALLOWED';
                             throw error;
                         }
