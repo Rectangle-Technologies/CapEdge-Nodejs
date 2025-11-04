@@ -1,6 +1,7 @@
 const express = require('express');
-const { query } = require('express-validator');
+const { query, body } = require('express-validator');
 const ledgerController = require('../controllers/ledgerController');
+const { handleValidationErrors } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -22,10 +23,6 @@ const queryValidation = [
     .optional()
     .isISO8601()
     .withMessage('Invalid end date format'),
-  query('dematAccountId')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid demat account ID'),
   query('transactionType')
     .optional()
     .isIn(['BUY', 'SELL', 'CREDIT', 'DEBIT'])
@@ -36,8 +33,31 @@ const queryValidation = [
     .withMessage('Format must be either csv or excel')
 ];
 
+const addLedgerEntryValidation = [
+  body('dematAccountId')
+    .notEmpty()
+    .withMessage('Demat account ID is required')
+    .isMongoId()
+    .withMessage('Invalid Demat account ID'),
+  body('transactionAmount')
+    .notEmpty()
+    .withMessage('Transaction amount is required')
+    .isFloat()
+    .withMessage('Transaction amount must be a number'),
+  body('date')
+    .notEmpty()
+    .withMessage('Date is required')
+    .isISO8601()
+    .withMessage('Invalid date format'),
+  body('tradeTransactionId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid trade transaction ID')
+];
+
 // Routes
-router.get('/', queryValidation, ledgerController.getLedgerEntries);
-router.get('/export', queryValidation, ledgerController.exportLedger);
+router.get('/get/:dematAccountId', queryValidation, handleValidationErrors, ledgerController.getLedgerEntries);
+router.post('/add', addLedgerEntryValidation, handleValidationErrors, ledgerController.addLedgerEntry);
+router.get('/export', queryValidation, handleValidationErrors, ledgerController.exportLedger);
 
 module.exports = router;

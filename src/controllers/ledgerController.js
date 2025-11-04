@@ -1,7 +1,5 @@
-const { validationResult } = require('express-validator');
 const ledgerService = require('../services/ledgerService');
 const exportService = require('../services/exportService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 const getLedgerEntries = async (req, res, next) => {
@@ -9,7 +7,7 @@ const getLedgerEntries = async (req, res, next) => {
     const filters = {
       startDate: req.query.startDate,
       endDate: req.query.endDate,
-      dematAccountId: req.query.dematAccountId,
+      dematAccountId: req.params.dematAccountId,
       transactionType: req.query.transactionType,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
@@ -22,6 +20,16 @@ const getLedgerEntries = async (req, res, next) => {
     next(error);
   }
 };
+
+const addLedgerEntry = async (req, res, next) => {
+  try {
+    const ledgerEntry = await ledgerService.addLedgerEntry(req.body);
+    
+    return ApiResponse.created(res, { ledgerEntry }, 'Ledger entry added successfully');
+  } catch (error) {
+    next(error);
+  }
+}
 
 const exportLedger = async (req, res, next) => {
   try {
@@ -62,5 +70,6 @@ const exportLedger = async (req, res, next) => {
 
 module.exports = {
   getLedgerEntries,
+  addLedgerEntry,
   exportLedger
 };

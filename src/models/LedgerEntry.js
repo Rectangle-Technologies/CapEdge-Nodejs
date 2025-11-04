@@ -10,7 +10,6 @@ const ledgerEntrySchema = new mongoose.Schema({
   tradeTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction',
-    required: [true, 'Trade transaction ID is required'],
     index: true
   },
   transactionAmount: {
