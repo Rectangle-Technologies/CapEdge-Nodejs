@@ -2,6 +2,8 @@ const DematAccount = require('../models/DematAccount');
 const UserAccount = require('../models/UserAccount');
 const Broker = require('../models/Broker');
 const Transaction = require('../models/Transaction');
+const LedgerEntry = require('../models/LedgerEntry');
+const { addLedgerEntry } = require('./ledgerService');
 
 /**
  * Demat Account Service
@@ -98,6 +100,15 @@ const createDematAccount = async (accountData) => {
   });
 
   await dematAccount.save();
+
+  // Add a ledger entry for initial balance if balance > 0
+  if (parseFloat(balance) > 0) {
+    await addLedgerEntry({
+      dematAccountId: dematAccount._id,
+      transactionAmount: parseFloat(balance),
+      date: new Date()
+    });
+  }
   
   // Populate references
   await dematAccount.populate('userAccountId', 'name panNumber address');
