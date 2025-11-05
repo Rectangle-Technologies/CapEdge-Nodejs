@@ -65,7 +65,7 @@ const updateRecords = async (transactions, session) => {
                     }
                     // Update holdings based on transaction type
                     if (fyTransaction.type === 'BUY') {
-                        closingBalance += fyTransaction.quantity * fyTransaction.price;
+                        closingBalance -= fyTransaction.quantity * fyTransaction.price;
                         holdings.push({
                             buyDate: fyTransaction.date,
                             quantity: fyTransaction.quantity,
@@ -76,7 +76,7 @@ const updateRecords = async (transactions, session) => {
                             financialYearId: financialYear._id
                         });
                     } else if (fyTransaction.type === 'SELL') {
-                        closingBalance -= fyTransaction.quantity * fyTransaction.price;
+                        closingBalance += fyTransaction.quantity * fyTransaction.price;
 
                         // Match with existing holdings (FIFO)
                         let quantityToSell = fyTransaction.quantity;
