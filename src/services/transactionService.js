@@ -253,7 +253,7 @@ const createTransactions = async (transactions) => {
             const txResult = await createTransaction(txData, session);
             result.push(...txResult);
         }
-        await updateRecords(result, session);
+        await updateRecords(result[0].date, result[0].dematAccountId, session);
         return result;
     });
 };

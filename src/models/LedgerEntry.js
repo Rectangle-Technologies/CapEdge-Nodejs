@@ -5,12 +5,10 @@ const ledgerEntrySchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'DematAccount',
     required: [true, 'Demat account ID is required'],
-    index: true
   },
   tradeTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction',
-    index: true
   },
   transactionAmount: {
     type: Number,
@@ -20,15 +18,9 @@ const ledgerEntrySchema = new mongoose.Schema({
   date: {
     type: Date,
     required: [true, 'Date is required'],
-    index: true
   },
 }, {
   timestamps: true
 });
-
-// Indexes
-ledgerEntrySchema.index({ dematAccountId: 1, date: -1 }); // Compound
-ledgerEntrySchema.index({ date: -1 });
-ledgerEntrySchema.index({ tradeTransactionId: 1 });
 
 module.exports = mongoose.model('LedgerEntry', ledgerEntrySchema);
