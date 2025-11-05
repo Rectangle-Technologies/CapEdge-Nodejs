@@ -1,5 +1,7 @@
+const { default: mongoose } = require('mongoose');
 const DematAccount = require('../models/DematAccount');
 const LedgerEntry = require('../models/LedgerEntry');
+const { updateRecords } = require('./recordService');
 
 /**
  * Ledger Service
@@ -164,7 +166,7 @@ const getLedgerEntries = async (filters = {}) => {
 };
 
 const addLedgerEntry = async (data) => {
-  const { dematAccountId, tradeTransactionId, transactionAmount, date } = data;
+  const { dematAccountId, transactionAmount, date } = data;
 
   const dematAccount = await DematAccount.findById(dematAccountId);
   if (!dematAccount) {
@@ -174,17 +176,64 @@ const addLedgerEntry = async (data) => {
     throw error;
   }
 
-  const ledgerEntry = await LedgerEntry.create({
-    dematAccountId,
-    tradeTransactionId,
-    transactionAmount,
-    date
-  });
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction({
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+      readPreference: 'primary'
+    });
 
-  return ledgerEntry;
+    const ledgerEntry = await LedgerEntry.create([{
+      dematAccountId,
+      transactionAmount,
+      date
+    }], { session });
+
+    await updateRecords(date, dematAccountId, session);
+
+    await session.commitTransaction();
+
+    return ledgerEntry;
+  } catch (error) {
+    console.error("Error in addLedgerEntry:", error);
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
 };
+
+const fixLedgerEntries = async (data) => {
+  const { date } = data;
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction({
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+      readPreference: 'primary'
+    });
+
+    const dematAccounts = await DematAccount.find().session(session);
+    
+    for (let dematAccount of dematAccounts) {
+      await updateRecords(date, dematAccount._id, session);
+    }
+
+    await session.commitTransaction();
+
+    return { message: 'Ledger entries fixed successfully' };
+  } catch (error) {
+    console.error("Error in fixLedgerEntries:", error);
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+}
 
 module.exports = {
   getLedgerEntries,
-  addLedgerEntry
+  addLedgerEntry,
+  fixLedgerEntries
 };

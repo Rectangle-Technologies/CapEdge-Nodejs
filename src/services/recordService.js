@@ -109,6 +109,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
 
             // Loop over ledger entries to update closing balance
             for (let entry of ledgerEntries) {
+                if (entry.tradeTransactionId) continue; // Skip entries linked to transactions
                 closingBalance += entry.transactionAmount;
             }
 
@@ -125,7 +126,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             await financialYear.save({ session });
         }
 
-        // Delete holdings with matching securityId and dematAccountId from DB
+        // Delete holdings with matching dematAccountId from DB
         await Holdings.deleteMany({
             dematAccountId
         }).session(session);

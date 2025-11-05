@@ -43,7 +43,9 @@ const addLedgerEntryValidation = [
     .notEmpty()
     .withMessage('Transaction amount is required')
     .isFloat()
-    .withMessage('Transaction amount must be a number'),
+    .withMessage('Transaction amount must be a number')
+    .custom((value) => value !== 0)
+    .withMessage('Transaction amount cannot be zero'),
   body('date')
     .notEmpty()
     .withMessage('Date is required')
@@ -59,5 +61,6 @@ const addLedgerEntryValidation = [
 router.get('/get/:dematAccountId', queryValidation, handleValidationErrors, ledgerController.getLedgerEntries);
 router.post('/add', addLedgerEntryValidation, handleValidationErrors, ledgerController.addLedgerEntry);
 router.get('/export', queryValidation, handleValidationErrors, ledgerController.exportLedger);
+router.post('/fix', ledgerController.fixLedgerEntries);
 
 module.exports = router;
