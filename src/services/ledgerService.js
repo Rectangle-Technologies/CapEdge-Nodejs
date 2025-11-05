@@ -117,7 +117,7 @@ const getLedgerEntries = async (filters = {}) => {
 
   // Sort by date (newest to oldest)
   pipeline.push({
-    $sort: { date: -1 }
+    $sort: { date: -1, createdAt: -1 }
   });
 
   // Project final fields

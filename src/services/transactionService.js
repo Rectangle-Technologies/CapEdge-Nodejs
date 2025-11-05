@@ -8,9 +8,10 @@ const { findOrCreateFinancialYear } = require('./financialYearService');
 const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
 const logger = require("../utils/logger");
+const { created } = require('../utils/response');
 
 const getTransactions = async (filters = {}) => {
-    const { startDate, endDate, type, securityId, dematAccountId, limit, pageNo = 1 } = filters;
+    const { startDate, endDate, type, securityId, dematAccountId, limit, pageNo = 1, financialYearId } = filters;
     const query = {};
     if (startDate || endDate) {
         query.date = {};
@@ -30,8 +31,11 @@ const getTransactions = async (filters = {}) => {
     if (dematAccountId) {
         query.dematAccountId = dematAccountId;
     }
+    if (financialYearId) {
+        query.financialYearId = financialYearId;
+    }
     const options = {
-        sort: { date: -1 },
+        sort: { date: -1, createdAt: -1 },
         skip: limit ? (pageNo - 1) * limit : 0,
         limit: limit ? parseInt(limit) : 0
     };
