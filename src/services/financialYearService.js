@@ -125,8 +125,8 @@ const  createFinancialYear = async (data, session = null) => {
 	const financialYear = new FinancialYear({
 		startDate: new Date(Date.UTC(fyStartYear, 3, 1, 0, 0, 0, 0)), // April 1st
 		endDate: new Date(Date.UTC(fyStartYear + 1, 2, 31, 23, 59, 59, 999)), // March 31st
-		stcgRate,
-		ltcgRate,
+		stcgRate: stcgRate / 100,
+		ltcgRate: ltcgRate / 100,
 		title: `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`
 	});
 	await financialYear.save({ session });
