@@ -23,9 +23,9 @@ const getLedgerEntries = async (req, res, next) => {
 
 const addLedgerEntry = async (req, res, next) => {
   try {
-    const ledgerEntry = await ledgerService.addLedgerEntry(req.body);
-    
-    return ApiResponse.created(res, { ledgerEntry }, 'Ledger entry added successfully');
+    const result = await ledgerService.addLedgerEntry(req.body);
+
+    return ApiResponse.created(res, result, 'Ledger entry added successfully');
   } catch (error) {
     next(error);
   }

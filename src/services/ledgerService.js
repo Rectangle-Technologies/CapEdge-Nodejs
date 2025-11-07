@@ -191,10 +191,14 @@ const addLedgerEntry = async (data) => {
     }], { session });
 
     await updateRecords(date, dematAccountId, session);
+    
+    // Find the latest balance of demat account
+    const updatedDematAccount = await DematAccount.findById(dematAccountId).session(session);
+    const latestBalance = updatedDematAccount ? updatedDematAccount.balance : null;
 
     await session.commitTransaction();
 
-    return ledgerEntry;
+    return { ledgerEntry: ledgerEntry[0], latestBalance };
   } catch (error) {
     console.error("Error in addLedgerEntry:", error);
     await session.abortTransaction();
