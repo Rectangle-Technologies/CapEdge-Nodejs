@@ -157,7 +157,6 @@ const queryValidation = [
 // Routes
 router.get('/get-all', queryValidation, handleValidationErrors, transactionController.getTransactions);
 router.post('/create', transactionValidation, handleValidationErrors, transactionController.createTransactions);
-router.put('/update/:id', idValidation, transactionValidation, handleValidationErrors, transactionController.updateTransaction);
 router.delete('/delete/:id', idValidation, handleValidationErrors, transactionController.deleteTransaction);
 
 module.exports = router;

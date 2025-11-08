@@ -35,16 +35,6 @@ const createTransactions = async (req, res, next) => {
   }
 };
 
-const updateTransaction = async (req, res, next) => {
-  try {
-    const transaction = await transactionService.updateTransaction(req.params.id, req.body);
-    
-    return ApiResponse.success(res, { transaction }, 'Transaction updated successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
 const deleteTransaction = async (req, res, next) => {
   try {
     await transactionService.deleteTransaction(req.params.id);
@@ -58,6 +48,5 @@ const deleteTransaction = async (req, res, next) => {
 module.exports = {
   getTransactions,
   createTransactions,
-  updateTransaction,
   deleteTransaction
 };
