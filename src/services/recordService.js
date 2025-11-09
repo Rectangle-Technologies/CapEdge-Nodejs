@@ -56,48 +56,52 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 console.log("--------------------------------FY Transaction------------------------------------");
                 console.log("Processing FY Transaction:", fyTransaction);
                 // Skip intraday transactions
-                if (fyTransaction.deliveryType === 'Intraday') {
-                    console.log("Skipping intraday transaction");
-                    continue;
-                }
+                // if (fyTransaction.deliveryType === 'Intraday') {
+                //     console.log("Skipping intraday transaction");
+                //     continue;
+                // }
                 // Update holdings based on transaction type
                 if (fyTransaction.type === 'BUY') {
                     closingBalance -= fyTransaction.quantity * fyTransaction.price;
-                    holdings.push({
-                        buyDate: fyTransaction.date,
-                        quantity: fyTransaction.quantity,
-                        price: fyTransaction.price,
-                        securityId: fyTransaction.securityId,
-                        transactionId: fyTransaction._id,
-                        dematAccountId: fyTransaction.dematAccountId,
-                        financialYearId: financialYear._id
-                    });
+                    if (fyTransaction.deliveryType === 'Delivery') {
+                        holdings.push({
+                            buyDate: fyTransaction.date,
+                            quantity: fyTransaction.quantity,
+                            price: fyTransaction.price,
+                            securityId: fyTransaction.securityId,
+                            transactionId: fyTransaction._id,
+                            dematAccountId: fyTransaction.dematAccountId,
+                            financialYearId: financialYear._id
+                        });
+                    }
                 } else if (fyTransaction.type === 'SELL') {
                     closingBalance += fyTransaction.quantity * fyTransaction.price;
 
-                    // Match with existing holdings (FIFO)
-                    let quantityToSell = fyTransaction.quantity;
-                    const holdingsForCurrentSecurity = holdings.filter(h => h.securityId.toString() === fyTransaction.securityId.toString());
-                    console.log("Holdings for current security before sell:", holdingsForCurrentSecurity);
-                    for (let i = 0; i < holdingsForCurrentSecurity.length && quantityToSell > 0; i++) {
-                        console.log("--------------------------------Processing Holding------------------------------------");
-                        console.log("Processing Holding:", holdingsForCurrentSecurity[i]);
-                        console.log("Quantity to sell:", quantityToSell);
-                        let holding = holdingsForCurrentSecurity[i];
-                        if (holding.quantity <= quantityToSell) {
-                            quantityToSell -= holding.quantity;
-                            holdings.splice(holdings.indexOf(holding), 1);
-                        } else {
-                            holding.quantity -= quantityToSell;
-                            quantityToSell = 0;
+                    if (fyTransaction.deliveryType === 'Delivery') {
+                        // Match with existing holdings (FIFO)
+                        let quantityToSell = fyTransaction.quantity;
+                        const holdingsForCurrentSecurity = holdings.filter(h => h.securityId.toString() === fyTransaction.securityId.toString());
+                        console.log("Holdings for current security before sell:", holdingsForCurrentSecurity);
+                        for (let i = 0; i < holdingsForCurrentSecurity.length && quantityToSell > 0; i++) {
+                            console.log("--------------------------------Processing Holding------------------------------------");
+                            console.log("Processing Holding:", holdingsForCurrentSecurity[i]);
+                            console.log("Quantity to sell:", quantityToSell);
+                            let holding = holdingsForCurrentSecurity[i];
+                            if (holding.quantity <= quantityToSell) {
+                                quantityToSell -= holding.quantity;
+                                holdings.splice(holdings.indexOf(holding), 1);
+                            } else {
+                                holding.quantity -= quantityToSell;
+                                quantityToSell = 0;
+                            }
                         }
-                    }
 
-                    if (quantityToSell > 0) {
-                        const error = new Error('Not enough holdings to sell for transaction: ' + fyTransaction._id);
-                        error.statusCode = 400;
-                        error.reasonCode = 'NOT_ALLOWED';
-                        throw error;
+                        if (quantityToSell > 0) {
+                            const error = new Error('Not enough holdings to sell for transaction: ' + fyTransaction._id);
+                            error.statusCode = 400;
+                            error.reasonCode = 'NOT_ALLOWED';
+                            throw error;
+                        }
                     }
                 }
             }

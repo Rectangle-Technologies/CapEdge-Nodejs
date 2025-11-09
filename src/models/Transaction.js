@@ -59,6 +59,11 @@ const transactionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FinancialYear',
     required: [true, 'Financial year ID is required']
+  },
+  buyTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction',
+    default: null
   }
 }, {
   timestamps: true

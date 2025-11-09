@@ -101,21 +101,20 @@ const validateTransaction = async (transactionData, session) => {
 };
 
 const handleIntradayTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
-    console.log("Handling intraday transaction", transactionData);
-    const [buyTransaction, sellTransaction] = await Transaction.create([
-        {
-            ...baseTransaction,
-            type: 'BUY',
-            quantity: transactionData.quantity,
-            price: transactionData.buyPrice
-        },
-        {
-            ...baseTransaction,
-            type: 'SELL',
-            quantity: transactionData.quantity,
-            price: transactionData.sellPrice
-        }
-    ], { session });
+    const [buyTransaction] = await Transaction.create([{
+        ...baseTransaction,
+        type: 'BUY',
+        quantity: transactionData.quantity,
+        price: transactionData.buyPrice
+    }], { session });
+
+    const [sellTransaction] = await Transaction.create([{
+        ...baseTransaction,
+        type: 'SELL',
+        quantity: transactionData.quantity,
+        price: transactionData.sellPrice,
+        buyTransactionId: buyTransaction._id  
+    }], { session });
 
     await LedgerEntry.create([
         {
@@ -262,7 +261,59 @@ const createTransactions = async (transactions) => {
     });
 };
 
+const deleteTransaction = async (transactionId) => {
+    // Execute with retry logic
+    return await executeTransactionWithRetry(async (session) => {
+        const transaction = await Transaction.findById(transactionId).session(session);
+        if (!transaction) {
+            const error = new Error('Transaction not found');
+            error.statusCode = 404;
+            error.reasonCode = 'NOT_FOUND';
+            throw error;
+        }
+
+        if (transaction.deliveryType === 'Intraday') {
+            // For Intraday transactions, only allow deletion through the BUY transaction
+            if (transaction.type === 'SELL') {
+                const error = new Error('Cannot delete SELL intraday transaction directly. Delete the corresponding BUY transaction instead.');
+                error.statusCode = 405;
+                error.reasonCode = 'NOT_ALLOWED';
+                throw error;
+            }
+
+            // Find and delete the corresponding SELL transaction
+            const sellTransaction = await Transaction.findOne({
+                buyTransactionId: transaction._id
+            }).session(session);
+
+            if (sellTransaction) {
+                // Delete both transactions
+                await Transaction.deleteMany({
+                    _id: { $in: [transaction._id, sellTransaction._id] }
+                }).session(session);
+                
+                // Delete corresponding ledger entries
+                await LedgerEntry.deleteMany({
+                    tradeTransactionId: { $in: [transaction._id, sellTransaction._id] }
+                }).session(session);
+            }
+        } else {
+            // For Delivery type, just delete the single transaction
+            await Transaction.deleteOne({ _id: transactionId }).session(session);
+            
+            await LedgerEntry.deleteMany({
+                tradeTransactionId: transaction._id
+            }).session(session);
+        }
+
+        // Update records after deletion
+        
+        await updateRecords(transaction.date, transaction.dematAccountId, session);
+    });
+}
+
 module.exports = {
     createTransactions,
-    getTransactions
+    getTransactions,
+    deleteTransaction
 };
