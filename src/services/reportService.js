@@ -14,8 +14,17 @@ const getPnLRecords = async (data) => {
     throw error;
   }
 
-  const dematAccount = await DematAccount.findById(dematAccountId);
-  if (!dematAccount) {
+  // Validate financial year has required tax rates
+  if (financialYear.ltcgRate === undefined || financialYear.ltcgRate === null ||
+      financialYear.stcgRate === undefined || financialYear.stcgRate === null) {
+    const error = new Error('Financial Year tax rates are not configured');
+    error.statusCode = 400;
+    error.reasonCode = 'INVALID_DATA';
+    throw error;
+  }
+
+  const dematAccountExists = await DematAccount.exists({ _id: dematAccountId });
+  if (!dematAccountExists) {
     const error = new Error('Demat Account not found');
     error.statusCode = 404;
     error.reasonCode = 'NOT_FOUND';
@@ -41,9 +50,27 @@ const getPnLRecords = async (data) => {
 
   const currentFYTransactions = await Transaction.find({ financialYearId, dematAccountId }).sort({ date: 1, createdAt: 1 });
 
+  // Fetch all intraday sell transactions upfront for performance
+  const intradayBuyTransactionIds = currentFYTransactions
+    .filter(txn => txn.deliveryType !== 'Delivery' && txn.type === 'BUY')
+    .map(txn => txn._id);
+  
+  const intradaySellMap = new Map();
+  if (intradayBuyTransactionIds.length > 0) {
+    const intradaySellTransactions = await Transaction.find({ 
+      buyTransactionId: { $in: intradayBuyTransactionIds } 
+    });
+    
+    intradaySellTransactions.forEach(txn => {
+      intradaySellMap.set(txn.buyTransactionId.toString(), txn);
+    });
+  }
+
   const result = {};
   result.startDate = financialYear.startDate;
-  result.endDate = currentFYTransactions[currentFYTransactions.length - 1]?.date || financialYear.endDate;
+  result.endDate = currentFYTransactions.length > 0 
+    ? currentFYTransactions[currentFYTransactions.length - 1].date 
+    : financialYear.endDate;
 
   for (const txn of currentFYTransactions) {
     if (txn.deliveryType === 'Delivery') {
@@ -57,27 +84,33 @@ const getPnLRecords = async (data) => {
           dematAccountId: txn.dematAccountId,
           financialYearId: txn.financialYearId
         });
-      } else {
+      } else if (txn.type === 'SELL') {
         let quantityToMatch = txn.quantity;
 
         const holdingsForSecurity = prevFYHoldings.filter(h => h.securityId.toString() === txn.securityId.toString());
+        const holdingsToRemove = [];
 
         for (const holding of holdingsForSecurity) {
           if (quantityToMatch <= 0) break;
 
+          let matchedQuantity = 0;
           if (holding.quantity > quantityToMatch) {
             holding.quantity -= quantityToMatch;
+            matchedQuantity = quantityToMatch;
             quantityToMatch = 0;
           } else {
             quantityToMatch -= holding.quantity;
-            prevFYHoldings.splice(prevFYHoldings.indexOf(holding), 1);
+            matchedQuantity = holding.quantity;
+            holdingsToRemove.push(holding);
           }
 
           const resultType = txn.price >= holding.price ? 'gain' : 'loss';
-          const daysHeld = Math.ceil((txn.date - holding.buyDate) / (1000 * 60 * 60 * 24));
+          const sellDate = new Date(txn.date);
+          const buyDate = new Date(holding.buyDate);
+          const daysHeld = Math.ceil((sellDate - buyDate) / (1000 * 60 * 60 * 24));
           const gainType = daysHeld > 365 ? 'LTCG' : 'STCG';
-          const taxableAmount = (txn.price - holding.price) * Math.min(holding.quantity, txn.quantity);
-          var calculatedTax = 0;
+          const taxableAmount = (txn.price - holding.price) * matchedQuantity;
+          let calculatedTax = 0;
           if (taxableAmount > 0) {
             if (gainType === 'LTCG') {
               calculatedTax = taxableAmount * financialYear.ltcgRate;
@@ -92,7 +125,7 @@ const getPnLRecords = async (data) => {
           result[txn.securityId].push({
             buyDate: holding.buyDate,
             sellDate: txn.date,
-            quantity: Math.min(holding.quantity, txn.quantity),
+            quantity: matchedQuantity,
             buyPrice: holding.price,
             sellPrice: txn.price,
             transactionId: txn._id,
@@ -101,16 +134,24 @@ const getPnLRecords = async (data) => {
             calculatedTax
           });
         }
+
+        // Remove fully matched holdings after iteration
+        holdingsToRemove.forEach(holding => {
+          const index = prevFYHoldings.indexOf(holding);
+          if (index > -1) {
+            prevFYHoldings.splice(index, 1);
+          }
+        });
       }
     } else {
       if (txn.type === 'BUY') {
-        const sellTransaction = await Transaction.findOne({ buyTransactionId: txn._id });
+        const sellTransaction = intradaySellMap.get(txn._id.toString());
 
         if (sellTransaction) {
           const resultType = sellTransaction.price >= txn.price ? 'gain' : 'loss';
           const gainType = 'STCG';
           const taxableAmount = (sellTransaction.price - txn.price) * txn.quantity;
-          var calculatedTax = 0;
+          let calculatedTax = 0;
           if (taxableAmount > 0) {
             calculatedTax = taxableAmount * financialYear.stcgRate;
           }
