@@ -17,9 +17,9 @@ const transactionValidation = [
     .isISO8601()
     .withMessage('Invalid date format')
     .custom((value) => {
-      // if (new Date(value) > new Date()) {
-      //   throw new Error('Transaction date cannot be in the future');
-      // }
+      if (new Date(value) > new Date()) {
+        throw new Error('Transaction date cannot be in the future');
+      }
       return true;
     }),
   body('*.type')
