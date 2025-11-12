@@ -44,7 +44,7 @@ const getPnLRecords = async (data) => {
 
   const prevFYHoldingsObj = previousFinancialYear.reports.get(dematAccountId)?.holdings || [];
   const prevFYHoldings = Array.isArray(prevFYHoldingsObj)
-    ? prevFYHoldingsObj.map(h => ({ ...h }))
+    ? prevFYHoldingsObj.map(h => h.toObject ? h.toObject() : h)
     : [];
   prevFYHoldings.sort((a, b) => a.buyDate - b.buyDate);
 

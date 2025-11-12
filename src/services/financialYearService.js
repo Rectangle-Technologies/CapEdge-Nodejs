@@ -1,5 +1,6 @@
 const Holdings = require('../models/Holdings');
 const FinancialYear = require("../models/FinancialYear");
+const DematAccount = require('../models/DematAccount');
 
 const getFinancialYears = async (filters) => {
 	const { date } = filters;
@@ -54,50 +55,43 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 		ltcgRate: prevFY.ltcgRate
 	}, session);
 	
-	const aggregationPipeline = [
-		{
-			$match: {
-				buyDate: {
-					$gte: prevFY.startDate,
-					$lte: prevFY.endDate
-				}
-			}
-		},
-		{
-			$group: {
-				_id: '$dematAccountId',
-				holdings: { $push: '$$ROOT' }
-			}
-		}
-	];
-
-	const holdingsByDematAccount = await Holdings.aggregate(aggregationPipeline).session(session);
-
-	// Build reports map
-	const reportsMap = new Map();
+	// Save the current holdings and balance in the previous FY report
+	const dematAccounts = await DematAccount.find().session(session);
 	
-	for (const record of holdingsByDematAccount) {
-		const dematAccountId = record._id.toString();
-		const holdings = record.holdings;
+	// Fetch all holdings for the previous FY in a single query
+	const allHoldings = await Holdings.find({
+		financialYearId: prevFY._id
+	}).session(session);
+	
+	// Group holdings by dematAccountId for efficient lookup
+	const holdingsByAccount = allHoldings.reduce((acc, holding) => {
+		const accountId = holding.dematAccountId.toString();
+		if (!acc[accountId]) {
+			acc[accountId] = [];
+		}
+		acc[accountId].push(holding);
+		return acc;
+	}, {});
+	
+	// Update reports for all demat accounts
+	for (const dematAccount of dematAccounts) {
+		const accountId = dematAccount._id.toString();
+		const holdings = holdingsByAccount[accountId] || [];
 		
-		// Get previous FY closing balance for this demat account
-		const prevReports = prevFY.reports.get(dematAccountId);
-		const openingBalance = prevReports ? prevReports.closingBalance : 0;
-		
-		// Calculate closing balance (opening + current holdings value)
-		const closingBalance = holdings.reduce((sum, holding) => {
-			return sum + (holding.quantity * holding.price);
-		}, openingBalance);
-		
-		reportsMap.set(dematAccountId, {
-			holdings: holdings,
-			openingBalance: openingBalance,
-			closingBalance: closingBalance
-		});
+		const prevReport = prevFY.reports.get(accountId) || {
+			holdings: [],
+			openingBalance: 0,
+			closingBalance: 0
+		};
+
+		prevReport.closingBalance = dematAccount.balance;
+		prevReport.holdings = holdings;
+
+		prevFY.reports.set(accountId, prevReport);
 	}
 	
-	currentFY.reports = reportsMap;
-	await currentFY.save({ session });
+	// Save once after all updates
+	await prevFY.save({ session });
 	
 	return currentFY;
 };
