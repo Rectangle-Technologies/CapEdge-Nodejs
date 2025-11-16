@@ -5,7 +5,6 @@ const brokerSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Broker name is required'],
     trim: true,
-    minlength: [2, 'Broker name must be at least 2 characters long'],
     maxlength: [100, 'Broker name cannot exceed 100 characters']
   },
   panNumber: {
@@ -19,7 +18,6 @@ const brokerSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Address is required'],
     trim: true,
-    minlength: [10, 'Address must be at least 10 characters long'],
     maxlength: [500, 'Address cannot exceed 500 characters']
   }
 }, {

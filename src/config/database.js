@@ -23,7 +23,7 @@ const connectDB = async () => {
 
     const conn = await mongoose.connect(mongoURI, options);
 
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
 
     // MongoDB connection events
     mongoose.connection.on('error', (err) => {
@@ -35,13 +35,13 @@ const connectDB = async () => {
     });
 
     mongoose.connection.on('reconnected', () => {
-      logger.info('MongoDB reconnected');
+      console.log('MongoDB reconnected');
     });
 
     // Graceful close on app termination
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
-      logger.info('MongoDB connection closed through app termination');
+      console.log('MongoDB connection closed through app termination');
       process.exit(0);
     });
 

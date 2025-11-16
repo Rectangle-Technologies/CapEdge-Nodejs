@@ -23,10 +23,19 @@ const transactionValidation = [
       return true;
     }),
   body('*.type')
-    .notEmpty()
-    .withMessage('Transaction type is required')
-    .isIn(transactionTypes)
-    .withMessage(`Transaction type must be one of: ${transactionTypes.join(', ')}`),
+    .custom((value, { req, path }) => {
+      // Extract the index from the path (e.g., "[0].price" -> 0)
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body[index]?.deliveryType;
+      
+      // Price is required only for Delivery type
+      if (deliveryType === 'Delivery') {
+        if (!value) {
+          throw new Error('Type is required for Delivery type transactions');
+        }
+      }
+      return true;
+    }),
   body('*.quantity')
     .notEmpty()
     .withMessage('Quantity is required')
@@ -148,7 +157,6 @@ const queryValidation = [
 // Routes
 router.get('/get-all', queryValidation, handleValidationErrors, transactionController.getTransactions);
 router.post('/create', transactionValidation, handleValidationErrors, transactionController.createTransactions);
-router.put('/update/:id', idValidation, transactionValidation, handleValidationErrors, transactionController.updateTransaction);
 router.delete('/delete/:id', idValidation, handleValidationErrors, transactionController.deleteTransaction);
 
 module.exports = router;

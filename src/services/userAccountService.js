@@ -1,6 +1,9 @@
 const UserAccount = require('../models/UserAccount');
 const DematAccount = require('../models/DematAccount');
 const Transaction = require('../models/Transaction');
+const Holdings = require('../models/Holdings');
+const LedgerEntry = require('../models/LedgerEntry');
+const FinancialYear = require('../models/FinancialYear');
 
 /**
  * User Account Service
@@ -187,8 +190,9 @@ const deleteUserAccount = async (userAccountId) => {
   // Check for dependent demat accounts
   const dematAccounts = await DematAccount.find({ userAccountId });
   if (dematAccounts.length > 0) {
-    // Check if any demat account has transactions
     const dematAccountIds = dematAccounts.map(acc => acc._id);
+
+    // Check if any demat account has transactions
     const transactionCount = await Transaction.countDocuments({
       dematAccountId: { $in: dematAccountIds }
     });
@@ -196,15 +200,69 @@ const deleteUserAccount = async (userAccountId) => {
     if (transactionCount > 0) {
       const error = new Error('Cannot delete user account with associated transactions');
       error.statusCode = 400;
+      error.reasonCode = 'HAS_TRANSACTIONS';
       throw error;
     }
 
+    // Check if any demat account has holdings
+    const holdingsCount = await Holdings.countDocuments({
+      dematAccountId: { $in: dematAccountIds }
+    });
+
+    if (holdingsCount > 0) {
+      const error = new Error('Cannot delete user account with associated holdings');
+      error.statusCode = 400;
+      error.reasonCode = 'HAS_HOLDINGS';
+      throw error;
+    }
+
+    // Check if any demat account has ledger entries
+    const ledgerCount = await LedgerEntry.countDocuments({
+      dematAccountId: { $in: dematAccountIds }
+    });
+
+    if (ledgerCount > 0) {
+      const error = new Error('Cannot delete user account with associated ledger entries');
+      error.statusCode = 400;
+      error.reasonCode = 'HAS_LEDGER_ENTRIES';
+      throw error;
+    }
+
+    // Check if any financial year reports contain holdings for these demat accounts
+    const financialYearsWithReports = await FinancialYear.find({
+      [`reports.${dematAccountIds[0]}`]: { $exists: true }
+    }).limit(1);
+
+    // More comprehensive check for all demat accounts
+    let hasReportData = financialYearsWithReports.length > 0;
+    
+    if (!hasReportData && dematAccountIds.length > 1) {
+      for (const dematAccountId of dematAccountIds) {
+        const fyWithReport = await FinancialYear.findOne({
+          [`reports.${dematAccountId}`]: { $exists: true }
+        });
+        if (fyWithReport) {
+          hasReportData = true;
+          break;
+        }
+      }
+    }
+
+    if (hasReportData) {
+      const error = new Error('Cannot delete user account with associated financial year reports');
+      error.statusCode = 400;
+      error.reasonCode = 'HAS_FY_REPORTS';
+      throw error;
+    }
+
+    // If no transactions, holdings, ledger entries, or reports, we still cannot delete if demat accounts exist
     const error = new Error('Cannot delete user account with associated demat accounts');
     error.statusCode = 400;
+    error.reasonCode = 'HAS_DEMAT_ACCOUNTS';
     throw error;
   }
 
-  // Delete user account
+  // Delete user account (only if no demat accounts exist)
   await UserAccount.findByIdAndDelete(userAccountId);
 };
 

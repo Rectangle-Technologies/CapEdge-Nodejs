@@ -8,7 +8,7 @@ const errorHandler = (err, req, res, next) => {
 
   // Log the error
   logger.error(`Error: ${message}`, {
-    stack: err.stack,
+    stack: err.stack ? err.stack.split('\n').map(line => line.trim()).join('\n    ') : 'No stack trace available',
   });
 
   // Prepare additional data

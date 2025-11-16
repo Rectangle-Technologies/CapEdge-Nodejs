@@ -6,7 +6,6 @@ const securitySchema = new mongoose.Schema({
     type: String,
     required: [true, 'Security name is required'],
     trim: true,
-    minlength: [2, 'Security name must be at least 2 characters long'],
     maxlength: [200, 'Security name cannot exceed 200 characters']
   },
   type: {

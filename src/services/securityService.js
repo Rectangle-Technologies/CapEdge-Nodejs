@@ -1,5 +1,6 @@
 const Security = require('../models/Security');
 const Transaction = require('../models/Transaction');
+const Holdings = require('../models/Holdings');
 const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require('../constants');
 
 /**
@@ -221,6 +222,14 @@ const deleteSecurity = async (securityId) => {
   const transactionCount = await Transaction.countDocuments({ securityId });
   if (transactionCount > 0) {
     const error = new Error('Cannot delete security with associated transactions');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Check for dependent holdings
+  const holdingsCount = await Holdings.countDocuments({ securityId });
+  if (holdingsCount > 0) {
+    const error = new Error('Cannot delete security with existing holdings');
     error.statusCode = 400;
     throw error;
   }

@@ -28,22 +28,21 @@ const holdingsSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction',
     required: [true, 'Transaction ID is required'],
-    index: true,
     unique: true // Each transaction can only have one unmatched record
   },
   dematAccountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'DematAccount',
-    required: [true, 'Demat account ID is required'],
-    index: true
+    required: [true, 'Demat account ID is required']
+  },
+  financialYearId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FinancialYear',
+    required: [true, 'Financial year ID is required']
   }
 }, {
   timestamps: true
 });
-
-// Indexes
-holdingsSchema.index({ dematAccountId: 1 });
-holdingsSchema.index({ transactionId: 1 });
 
 module.exports = mongoose.model('Holdings', holdingsSchema);
 module.exports.holdingsSchema = holdingsSchema;

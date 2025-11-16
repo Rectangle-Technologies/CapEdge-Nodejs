@@ -1,413 +1,210 @@
-const { Parser } = require('json2csv');
 const ExcelJS = require('exceljs');
 const logger = require('../utils/logger');
+const Security = require('../models/Security');
 
-/**
- * Export Service
- * Handles data export to CSV and Excel formats
- */
+const exportToExcel = async (data, sheetName) => {
+  const { startDate, endDate, ...securitiesData } = data;
+  const securityIds = Object.keys(securitiesData);
+  const securities = await Security.find({ _id: { $in: securityIds } }).select('name');
+  const securityMap = {};
+  securities.forEach(sec => {
+    securityMap[sec._id.toString()] = sec.name;
+  });
 
-/**
- * Export data to CSV format
- * @param {Array} data - Array of objects to export
- * @param {Array} fields - Fields configuration for CSV columns
- * @returns {String} - CSV string
- */
-const exportToCSV = (data, fields) => {
-  try {
-    const json2csvParser = new Parser({ fields });
-    const csv = json2csvParser.parse(data);
-    return csv;
-  } catch (error) {
-    logger.error('Error in exportToCSV:', error);
-    throw error;
-  }
-};
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
 
-/**
- * Export P&L report to Excel format
- * @param {Array} records - P&L records
- * @param {Object} summary - Summary statistics
- * @returns {Promise<Buffer>} - Excel file buffer
- */
-const exportPnLToExcel = async (records, summary) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('P&L Report');
+  // Helper to format date as dd/mm/yy using regex
+  const formatDate = (date) => {
+    if (!date) return '';
+    const isoString = date.toISOString();
+    const formattedDate = isoString.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1');
+    return formattedDate;
+  };
+  worksheet.mergeCells('A1:O1');
+  worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
+  worksheet.getCell('A3').value = 'Stock';
+  worksheet.mergeCells('B3:E3'); worksheet.getCell('B3').value = 'Buy';
+  worksheet.mergeCells('F3:I3'); worksheet.getCell('F3').value = 'Sell';
+  worksheet.mergeCells('J3:K3'); worksheet.getCell('J3').value = 'Gain';
+  worksheet.mergeCells('L3:M3'); worksheet.getCell('L3').value = 'Loss';
+  worksheet.mergeCells('N3:O3'); worksheet.getCell('N3').value = 'Tax';
+  worksheet.getRow(4).values = [
+    '', 'Date', 'Quantity', 'Price', 'Amount', 'Date', 'Quantity', 'Price', 'Amount', 'Long Term', 'Short Term', 'Long Term', 'Short Term', 'Long Term', 'Short Term'
+  ];
 
-    // Add title
-    worksheet.mergeCells('A1:M1');
-    worksheet.getCell('A1').value = 'Profit & Loss Report';
-    worksheet.getCell('A1').font = { size: 16, bold: true };
-    worksheet.getCell('A1').alignment = { horizontal: 'center' };
+  // Set column widths
+  worksheet.columns = [
+    { key: 'A', width: 20 }, // Stock
+    { key: 'B', width: 10 }, // Buy Date
+    { key: 'C', width: 8 }, // Buy Quantity
+    { key: 'D', width: 15 }, // Buy Price
+    { key: 'E', width: 15 }, // Buy Amount
+    { key: 'F', width: 10 }, // Sell Date
+    { key: 'G', width: 8 }, // Sell Quantity
+    { key: 'H', width: 15 }, // Sell Price
+    { key: 'I', width: 15 }, // Sell Amount
+    { key: 'J', width: 15 }, // Gain Long Term
+    { key: 'K', width: 15 }, // Gain Short Term
+    { key: 'L', width: 15 }, // Loss Long Term
+    { key: 'M', width: 15 }, // Loss Short Term
+    { key: 'N', width: 15 }, // Tax Long Term
+    { key: 'O', width: 15 }, // Tax Short Term
+  ];
 
-    // Add generation date
-    worksheet.mergeCells('A2:M2');
-    worksheet.getCell('A2').value = `Generated on: ${new Date().toLocaleString()}`;
-    worksheet.getCell('A2').alignment = { horizontal: 'center' };
+  // INR Currency format
+  const inrFormat = '₹#,##0.00';
 
-    // Add summary section
-    worksheet.addRow([]);
-    worksheet.addRow(['Summary']);
-    worksheet.getCell('A4').font = { bold: true, size: 12 };
-    
-    worksheet.addRow(['Total Profit:', summary.totalProfit || 0]);
-    worksheet.addRow(['Total Loss:', summary.totalLoss || 0]);
-    worksheet.addRow(['Net Profit/Loss:', summary.netProfitLoss || 0]);
-    worksheet.addRow(['Total Trades:', summary.totalTrades || 0]);
-    worksheet.addRow(['STCG Count:', summary.stcgCount || 0]);
-    worksheet.addRow(['LTCG Count:', summary.ltcgCount || 0]);
-    worksheet.addRow(['STCG P&L:', summary.stcgProfitLoss || 0]);
-    worksheet.addRow(['LTCG P&L:', summary.ltcgProfitLoss || 0]);
+  let totalBuyAmount = 0;
+  let totalSellAmount = 0;
+  let totalGainLong = 0;
+  let totalGainShort = 0;
+  let totalLossLong = 0;
+  let totalLossShort = 0;
+  let totalTaxLong = 0;
+  let totalTaxShort = 0;
 
-    // Add space before data
-    worksheet.addRow([]);
-    worksheet.addRow([]);
+  let currentRow = 5;
+  for (const securityId of securityIds) {
+    const transactions = securitiesData[securityId];
+    const securityName = securityMap[securityId] || 'Unknown';
+    worksheet.getCell(`A${currentRow}`).value = securityName;
+    let secBuyAmount = 0, secSellAmount = 0, secGainLong = 0, secGainShort = 0, secLossLong = 0, secLossShort = 0, secTaxLong = 0, secTaxShort = 0;
 
-    // Define columns
-    worksheet.columns = [
-      { header: 'Buy Date', key: 'buyDate', width: 12 },
-      { header: 'Sell Date', key: 'sellDate', width: 12 },
-      { header: 'Security', key: 'security', width: 25 },
-      { header: 'Exchange', key: 'exchange', width: 12 },
-      { header: 'Quantity', key: 'quantity', width: 10 },
-      { header: 'Buy Price', key: 'buyPrice', width: 12 },
-      { header: 'Sell Price', key: 'sellPrice', width: 12 },
-      { header: 'Profit/Loss', key: 'profitLoss', width: 12 },
-      { header: 'Capital Gain', key: 'capitalGainType', width: 12 },
-      { header: 'Holding Period', key: 'holdingPeriod', width: 15 },
-      { header: 'User', key: 'user', width: 20 },
-      { header: 'Broker', key: 'broker', width: 20 },
-      { header: 'Type', key: 'type', width: 10 }
-    ];
-
-    // Style header row
-    const headerRow = worksheet.getRow(14);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD3D3D3' }
-    };
-
-    // Add data rows
-    records.forEach(record => {
-      worksheet.addRow({
-        buyDate: new Date(record.buyDate).toLocaleDateString(),
-        sellDate: new Date(record.sellDate).toLocaleDateString(),
-        security: record.security?.name || 'N/A',
-        exchange: record.stockExchange?.code || 'N/A',
-        quantity: record.quantity,
-        buyPrice: record.buyPrice,
-        sellPrice: record.sellPrice,
-        profitLoss: record.profitLoss,
-        capitalGainType: record.capitalGainType,
-        holdingPeriod: `${Math.floor(record.holdingPeriod)} days`,
-        user: record.userAccount?.name || 'N/A',
-        broker: record.broker?.name || 'N/A',
-        type: record.security?.type || 'N/A'
-      });
-    });
-
-    // Auto-filter
-    worksheet.autoFilter = {
-      from: 'A14',
-      to: 'M14'
-    };
-
-    // Format number columns
-    worksheet.getColumn('buyPrice').numFmt = '₹#,##0.00';
-    worksheet.getColumn('sellPrice').numFmt = '₹#,##0.00';
-    worksheet.getColumn('profitLoss').numFmt = '₹#,##0.00';
-
-    // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    return buffer;
-  } catch (error) {
-    logger.error('Error in exportPnLToExcel:', error);
-    throw error;
-  }
-};
-
-/**
- * Export Holdings report to Excel format
- * @param {Array} holdings - Holdings records
- * @param {Object} summary - Summary statistics
- * @returns {Promise<Buffer>} - Excel file buffer
- */
-const exportHoldingsToExcel = async (holdings, summary) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Holdings Report');
-
-    // Add title
-    worksheet.mergeCells('A1:K1');
-    worksheet.getCell('A1').value = 'Current Holdings Report';
-    worksheet.getCell('A1').font = { size: 16, bold: true };
-    worksheet.getCell('A1').alignment = { horizontal: 'center' };
-
-    // Add generation date
-    worksheet.mergeCells('A2:K2');
-    worksheet.getCell('A2').value = `Generated on: ${new Date().toLocaleString()}`;
-    worksheet.getCell('A2').alignment = { horizontal: 'center' };
-
-    // Add summary section
-    worksheet.addRow([]);
-    worksheet.addRow(['Portfolio Summary']);
-    worksheet.getCell('A4').font = { bold: true, size: 12 };
-    
-    worksheet.addRow(['Total Investment:', summary.totalInvestment || 0]);
-    worksheet.addRow(['Current Value:', summary.totalCurrentValue || 0]);
-    worksheet.addRow(['Unrealized P&L:', summary.totalUnrealizedPnL || 0]);
-    worksheet.addRow(['Portfolio Return:', `${summary.portfolioReturn || 0}%`]);
-    worksheet.addRow(['Total Holdings:', summary.totalHoldings || 0]);
-    worksheet.addRow(['Total Quantity:', summary.totalQuantity || 0]);
-
-    // Add space before data
-    worksheet.addRow([]);
-    worksheet.addRow([]);
-
-    // Define columns
-    worksheet.columns = [
-      { header: 'Buy Date', key: 'buyDate', width: 12 },
-      { header: 'Security', key: 'security', width: 25 },
-      { header: 'Exchange', key: 'exchange', width: 12 },
-      { header: 'Quantity', key: 'quantity', width: 10 },
-      { header: 'Buy Price', key: 'buyPrice', width: 12 },
-      { header: 'Investment', key: 'investment', width: 15 },
-      { header: 'Current Price', key: 'currentPrice', width: 12 },
-      { header: 'Current Value', key: 'currentValue', width: 15 },
-      { header: 'Unrealized P&L', key: 'unrealizedPnL', width: 15 },
-      { header: 'P&L %', key: 'pnlPercentage', width: 10 },
-      { header: 'Holding Days', key: 'holdingDays', width: 12 },
-      { header: 'User', key: 'user', width: 20 },
-      { header: 'Broker', key: 'broker', width: 20 },
-      { header: 'Type', key: 'type', width: 10 }
-    ];
-
-    // Style header row
-    const headerRow = worksheet.getRow(12);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD3D3D3' }
-    };
-
-    // Add data rows
-    holdings.forEach(holding => {
-      worksheet.addRow({
-        buyDate: new Date(holding.buyDate).toLocaleDateString(),
-        security: holding.security?.name || 'N/A',
-        exchange: holding.stockExchange?.code || 'N/A',
-        quantity: holding.quantity,
-        buyPrice: holding.buyPrice,
-        investment: holding.totalInvestment,
-        currentPrice: holding.currentMarketPrice || holding.buyPrice,
-        currentValue: holding.currentValue,
-        unrealizedPnL: holding.unrealizedPnL,
-        pnlPercentage: `${holding.pnlPercentage}%`,
-        holdingDays: holding.holdingDays,
-        user: holding.userAccount?.name || 'N/A',
-        broker: holding.broker?.name || 'N/A',
-        type: holding.security?.type || 'N/A'
-      });
-    });
-
-    // Auto-filter
-    worksheet.autoFilter = {
-      from: 'A12',
-      to: 'N12'
-    };
-
-    // Format number columns
-    worksheet.getColumn('buyPrice').numFmt = '₹#,##0.00';
-    worksheet.getColumn('investment').numFmt = '₹#,##0.00';
-    worksheet.getColumn('currentPrice').numFmt = '₹#,##0.00';
-    worksheet.getColumn('currentValue').numFmt = '₹#,##0.00';
-    worksheet.getColumn('unrealizedPnL').numFmt = '₹#,##0.00';
-
-    // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    return buffer;
-  } catch (error) {
-    logger.error('Error in exportHoldingsToExcel:', error);
-    throw error;
-  }
-};
-
-/**
- * Export Ledger report to Excel format
- * @param {Array} entries - Ledger entries
- * @param {Object} summary - Summary statistics
- * @returns {Promise<Buffer>} - Excel file buffer
- */
-const exportLedgerToExcel = async (entries, summary) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Ledger');
-
-    // Add title
-    worksheet.mergeCells('A1:J1');
-    worksheet.getCell('A1').value = 'Ledger Report';
-    worksheet.getCell('A1').font = { size: 16, bold: true };
-    worksheet.getCell('A1').alignment = { horizontal: 'center' };
-
-    // Add generation date
-    worksheet.mergeCells('A2:J2');
-    worksheet.getCell('A2').value = `Generated on: ${new Date().toLocaleString()}`;
-    worksheet.getCell('A2').alignment = { horizontal: 'center' };
-
-    // Add summary section
-    worksheet.addRow([]);
-    worksheet.addRow(['Summary']);
-    worksheet.getCell('A4').font = { bold: true, size: 12 };
-    
-    worksheet.addRow(['Total Debits:', summary.totalDebits || 0]);
-    worksheet.addRow(['Total Credits:', summary.totalCredits || 0]);
-    worksheet.addRow(['Net Amount:', summary.netAmount || 0]);
-    worksheet.addRow(['Total Entries:', summary.totalEntries || 0]);
-    if (summary.currentBalance !== undefined) {
-      worksheet.addRow(['Current Balance:', summary.currentBalance]);
+    for (const tx of transactions) {
+      worksheet.getCell(`B${currentRow}`).value = tx.buyDate ? formatDate(tx.buyDate) : '';
+      worksheet.getCell(`C${currentRow}`).value = tx.quantity || null;
+      worksheet.getCell(`D${currentRow}`).value = tx.buyPrice || null;
+      worksheet.getCell(`D${currentRow}`).numFmt = inrFormat;
+      const buyAmount = (tx.quantity && tx.buyPrice) ? tx.quantity * tx.buyPrice : 0;
+      worksheet.getCell(`E${currentRow}`).value = buyAmount || null;
+      worksheet.getCell(`E${currentRow}`).numFmt = inrFormat;
+      secBuyAmount += buyAmount;
+      worksheet.getCell(`F${currentRow}`).value = tx.sellDate ? formatDate(tx.sellDate) : '';
+      worksheet.getCell(`G${currentRow}`).value = tx.quantity || null;
+      worksheet.getCell(`H${currentRow}`).value = tx.sellPrice || null;
+      worksheet.getCell(`H${currentRow}`).numFmt = inrFormat;
+      const sellAmount = (tx.quantity && tx.sellPrice) ? tx.quantity * tx.sellPrice : 0;
+      worksheet.getCell(`I${currentRow}`).value = sellAmount || null;
+      worksheet.getCell(`I${currentRow}`).numFmt = inrFormat;
+      secSellAmount += sellAmount;
+      if (tx.resultType === 'gain') {
+        if (tx.gainType === 'LTCG') {
+          worksheet.getCell(`J${currentRow}`).value = sellAmount - buyAmount;
+          worksheet.getCell(`J${currentRow}`).numFmt = inrFormat;
+          secGainLong += (sellAmount - buyAmount);
+        } else {
+          worksheet.getCell(`K${currentRow}`).value = sellAmount - buyAmount;
+          worksheet.getCell(`K${currentRow}`).numFmt = inrFormat;
+          secGainShort += (sellAmount - buyAmount);
+        }
+      } else if (tx.resultType === 'loss') {
+        if (tx.gainType === 'LTCG') {
+          worksheet.getCell(`L${currentRow}`).value = buyAmount - sellAmount;
+          worksheet.getCell(`L${currentRow}`).numFmt = inrFormat;
+          secLossLong += (buyAmount - sellAmount);
+        } else {
+          worksheet.getCell(`M${currentRow}`).value = buyAmount - sellAmount;
+          worksheet.getCell(`M${currentRow}`).numFmt = inrFormat;
+          secLossShort += (buyAmount - sellAmount);
+        }
+      }
+      if (tx.gainType === 'LTCG') {
+        worksheet.getCell(`N${currentRow}`).value = tx.calculatedTax || 0;
+        worksheet.getCell(`N${currentRow}`).numFmt = inrFormat;
+        secTaxLong += tx.calculatedTax || 0;
+      } else {
+        worksheet.getCell(`O${currentRow}`).value = tx.calculatedTax || 0;
+        worksheet.getCell(`O${currentRow}`).numFmt = inrFormat;
+        secTaxShort += tx.calculatedTax || 0;
+      }
+      currentRow++;
     }
-
-    // Add space before data
-    worksheet.addRow([]);
-    worksheet.addRow([]);
-
-    // Define columns
-    worksheet.columns = [
-      { header: 'Date', key: 'date', width: 12 },
-      { header: 'Type', key: 'type', width: 10 },
-      { header: 'Amount', key: 'amount', width: 15 },
-      { header: 'Running Balance', key: 'runningBalance', width: 15 },
-      { header: 'Security', key: 'security', width: 25 },
-      { header: 'Quantity', key: 'quantity', width: 10 },
-      { header: 'Price', key: 'price', width: 12 },
-      { header: 'Transaction Type', key: 'transactionType', width: 15 },
-      { header: 'User', key: 'user', width: 20 },
-      { header: 'Broker', key: 'broker', width: 20 }
-    ];
-
-    // Style header row
-    const headerRowIndex = summary.currentBalance !== undefined ? 11 : 10;
-    const headerRow = worksheet.getRow(headerRowIndex);
-    headerRow.font = { bold: true };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD3D3D3' }
-    };
-
-    // Add data rows
-    entries.forEach(entry => {
-      worksheet.addRow({
-        date: new Date(entry.date).toLocaleDateString(),
-        type: entry.transactionType,
-        amount: entry.amount,
-        runningBalance: entry.runningBalance || 0,
-        security: entry.security?.name || 'N/A',
-        quantity: entry.transaction?.quantity || 'N/A',
-        price: entry.transaction?.price || 'N/A',
-        transactionType: entry.transaction?.type || 'N/A',
-        user: entry.userAccount?.name || 'N/A',
-        broker: entry.broker?.name || 'N/A'
-      });
-    });
-
-    // Auto-filter
-    worksheet.autoFilter = {
-      from: `A${headerRowIndex}`,
-      to: `J${headerRowIndex}`
-    };
-
-    // Format number columns
-    worksheet.getColumn('amount').numFmt = '₹#,##0.00';
-    worksheet.getColumn('runningBalance').numFmt = '₹#,##0.00';
-    worksheet.getColumn('price').numFmt = '₹#,##0.00';
-
-    // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
-    return buffer;
-  } catch (error) {
-    logger.error('Error in exportLedgerToExcel:', error);
-    throw error;
+    totalBuyAmount += secBuyAmount;
+    totalSellAmount += secSellAmount;
+    totalGainLong += secGainLong;
+    totalGainShort += secGainShort;
+    totalLossLong += secLossLong;
+    totalLossShort += secLossShort;
+    totalTaxLong += secTaxLong;
+    totalTaxShort += secTaxShort;
+    currentRow++;
   }
-};
+  worksheet.getCell(`D${currentRow}`).value = 'Total';
+  worksheet.getCell(`E${currentRow}`).value = totalBuyAmount;
+  worksheet.getCell(`E${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`I${currentRow}`).value = totalSellAmount;
+  worksheet.getCell(`I${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`J${currentRow}`).value = totalGainLong;
+  worksheet.getCell(`J${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`K${currentRow}`).value = totalGainShort;
+  worksheet.getCell(`K${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`L${currentRow}`).value = totalLossLong;
+  worksheet.getCell(`L${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`M${currentRow}`).value = totalLossShort;
+  worksheet.getCell(`M${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`N${currentRow}`).value = totalTaxLong;
+  worksheet.getCell(`N${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`O${currentRow}`).value = totalTaxShort;
+  worksheet.getCell(`O${currentRow}`).numFmt = inrFormat;
 
-/**
- * Prepare P&L data for CSV export
- * @param {Array} records - P&L records
- * @returns {Array} - Formatted data for CSV
- */
-const preparePnLForCSV = (records) => {
-  return records.map(record => ({
-    'Buy Date': new Date(record.buyDate).toLocaleDateString(),
-    'Sell Date': new Date(record.sellDate).toLocaleDateString(),
-    'Security': record.security?.name || 'N/A',
-    'Exchange': record.stockExchange?.code || 'N/A',
-    'Quantity': record.quantity,
-    'Buy Price': record.buyPrice,
-    'Sell Price': record.sellPrice,
-    'Profit/Loss': record.profitLoss,
-    'Capital Gain Type': record.capitalGainType,
-    'Holding Period (Days)': Math.floor(record.holdingPeriod),
-    'User': record.userAccount?.name || 'N/A',
-    'Broker': record.broker?.name || 'N/A',
-    'Security Type': record.security?.type || 'N/A'
-  }));
-};
+  // Iterate over the entries security wise. Start from the last entry of every security and move upwards. If the buyDate and price is same as previous, add the quantity and amount and remove the row
+  let trackingRow = 5;
+  for (const securityId of securityIds) {
+    const transactions = securitiesData[securityId];
+    let startRow = trackingRow;
+    let endRow = startRow + transactions.length - 1;
+    for (let row = endRow; row > startRow; row--) {
+      const currentBuyDate = worksheet.getCell(`B${row}`).value;
+      const currentBuyPrice = worksheet.getCell(`D${row}`).value;
+      const previousBuyDate = worksheet.getCell(`B${row - 1}`).value;
+      const previousBuyPrice = worksheet.getCell(`D${row - 1}`).value;
+      
+      // Compare dates and prices - dates are already formatted strings at this point
+      const datesMatch = currentBuyDate && previousBuyDate && currentBuyDate === previousBuyDate;
+      const pricesMatch = currentBuyPrice && previousBuyPrice && currentBuyPrice === previousBuyPrice;
+      
+      if (datesMatch && pricesMatch) {
+        // Same buy date and price, aggregate quantities and amounts
+        const currentQuantity = worksheet.getCell(`C${row}`).value || 0;
+        const previousQuantity = worksheet.getCell(`C${row - 1}`).value || 0;
+        worksheet.getCell(`C${row - 1}`).value = currentQuantity + previousQuantity;
 
-/**
- * Prepare Holdings data for CSV export
- * @param {Array} holdings - Holdings records
- * @returns {Array} - Formatted data for CSV
- */
-const prepareHoldingsForCSV = (holdings) => {
-  return holdings.map(holding => ({
-    'Buy Date': new Date(holding.buyDate).toLocaleDateString(),
-    'Security': holding.security?.name || 'N/A',
-    'Exchange': holding.stockExchange?.code || 'N/A',
-    'Quantity': holding.quantity,
-    'Buy Price': holding.buyPrice,
-    'Total Investment': holding.totalInvestment,
-    'Current Price': holding.currentMarketPrice || holding.buyPrice,
-    'Current Value': holding.currentValue,
-    'Unrealized P&L': holding.unrealizedPnL,
-    'P&L Percentage': `${holding.pnlPercentage}%`,
-    'Holding Days': holding.holdingDays,
-    'User': holding.userAccount?.name || 'N/A',
-    'Broker': holding.broker?.name || 'N/A',
-    'Security Type': holding.security?.type || 'N/A'
-  }));
-};
+        const currentBuyAmount = worksheet.getCell(`E${row}`).value || 0;
+        const previousBuyAmount = worksheet.getCell(`E${row - 1}`).value || 0;
+        worksheet.getCell(`E${row - 1}`).value = currentBuyAmount + previousBuyAmount;
+        worksheet.getCell(`E${row - 1}`).numFmt = inrFormat;
 
-/**
- * Prepare Ledger data for CSV export
- * @param {Array} entries - Ledger entries
- * @returns {Array} - Formatted data for CSV
- */
-const prepareLedgerForCSV = (entries) => {
-  return entries.map(entry => ({
-    'Date': new Date(entry.date).toLocaleDateString(),
-    'Type': entry.transactionType,
-    'Amount': entry.amount,
-    'Running Balance': entry.runningBalance || 0,
-    'Security': entry.security?.name || 'N/A',
-    'Quantity': entry.transaction?.quantity || 'N/A',
-    'Price': entry.transaction?.price || 'N/A',
-    'Transaction Type': entry.transaction?.type || 'N/A',
-    'User': entry.userAccount?.name || 'N/A',
-    'Broker': entry.broker?.name || 'N/A'
-  }));
+        worksheet.getCell(`B${row}`).value = null;
+        worksheet.getCell(`C${row}`).value = null;
+        worksheet.getCell(`D${row}`).value = null;
+        worksheet.getCell(`E${row}`).value = null;
+      }
+    }
+    trackingRow = endRow + 2; // Move to next security (skip blank row between securities)
+  }
+
+  // Apply currency format to all currency columns for the entire data range
+  const lastRow = currentRow;
+  for (let row = 5; row <= lastRow; row++) {
+    worksheet.getCell(`D${row}`).numFmt = inrFormat; // Buy Price
+    worksheet.getCell(`E${row}`).numFmt = inrFormat; // Buy Amount
+    worksheet.getCell(`H${row}`).numFmt = inrFormat; // Sell Price
+    worksheet.getCell(`I${row}`).numFmt = inrFormat; // Sell Amount
+    worksheet.getCell(`J${row}`).numFmt = inrFormat; // Gain Long Term
+    worksheet.getCell(`K${row}`).numFmt = inrFormat; // Gain Short Term
+    worksheet.getCell(`L${row}`).numFmt = inrFormat; // Loss Long Term
+    worksheet.getCell(`M${row}`).numFmt = inrFormat; // Loss Short Term
+    worksheet.getCell(`N${row}`).numFmt = inrFormat; // Tax Long Term
+    worksheet.getCell(`O${row}`).numFmt = inrFormat; // Tax Short Term
+  }
+
+  // Return buffer instead of saving to disk
+  const buffer = await workbook.xlsx.writeBuffer();
+  logger.info(`Excel buffer generated for download.`);
+  return buffer;
 };
 
 module.exports = {
-  exportToCSV,
-  exportPnLToExcel,
-  exportHoldingsToExcel,
-  exportLedgerToExcel,
-  preparePnLForCSV,
-  prepareHoldingsForCSV,
-  prepareLedgerForCSV
+  exportToExcel
 };

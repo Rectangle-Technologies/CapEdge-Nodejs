@@ -2,6 +2,10 @@ const DematAccount = require('../models/DematAccount');
 const UserAccount = require('../models/UserAccount');
 const Broker = require('../models/Broker');
 const Transaction = require('../models/Transaction');
+const LedgerEntry = require('../models/LedgerEntry');
+const Holdings = require('../models/Holdings');
+const FinancialYear = require('../models/FinancialYear');
+const { addLedgerEntry } = require('./ledgerService');
 
 /**
  * Demat Account Service
@@ -98,6 +102,15 @@ const createDematAccount = async (accountData) => {
   });
 
   await dematAccount.save();
+
+  // Add a ledger entry for initial balance if balance > 0
+  if (parseFloat(balance) > 0) {
+    await addLedgerEntry({
+      dematAccountId: dematAccount._id,
+      transactionAmount: parseFloat(balance),
+      date: new Date()
+    });
+  }
   
   // Populate references
   await dematAccount.populate('userAccountId', 'name panNumber address');
@@ -156,8 +169,44 @@ const deleteDematAccount = async (accountId) => {
   
   if (transactionCount > 0) {
     const error = new Error('Cannot delete demat account with associated transactions');
-    error.statusCode = 405;
-    error.reasonCode = 'METHOD_NOT_ALLOWED';
+    error.statusCode = 400;
+    error.reasonCode = 'HAS_TRANSACTIONS';
+    throw error;
+  }
+
+  // Check for dependent holdings
+  const holdingsCount = await Holdings.countDocuments({ 
+    dematAccountId: accountId 
+  });
+  
+  if (holdingsCount > 0) {
+    const error = new Error('Cannot delete demat account with associated holdings');
+    error.statusCode = 400;
+    error.reasonCode = 'HAS_HOLDINGS';
+    throw error;
+  }
+
+  // Check for dependent ledger entries
+  const ledgerCount = await LedgerEntry.countDocuments({ 
+    dematAccountId: accountId 
+  });
+  
+  if (ledgerCount > 0) {
+    const error = new Error('Cannot delete demat account with associated ledger entries');
+    error.statusCode = 400;
+    error.reasonCode = 'HAS_LEDGER_ENTRIES';
+    throw error;
+  }
+
+  // Check if any financial year reports contain this demat account
+  const fyWithReport = await FinancialYear.findOne({
+    [`reports.${accountId}`]: { $exists: true }
+  });
+
+  if (fyWithReport) {
+    const error = new Error('Cannot delete demat account with associated financial year reports');
+    error.statusCode = 400;
+    error.reasonCode = 'HAS_FY_REPORTS';
     throw error;
   }
 

@@ -119,6 +119,20 @@ const getPaginationValues = (query) => {
   };
 };
 
+const getGainType = (buyDate, sellDate) => {
+  const buyYear = buyDate.getFullYear();
+  const sellYear = sellDate.getFullYear();
+  if (sellYear - buyYear > 1) {
+    return 'LTCG';
+  } else if (sellYear - buyYear === 1) {
+    if (sellDate.getMonth() > buyDate.getMonth() || 
+        (sellDate.getMonth() === buyDate.getMonth() && sellDate.getDate() >= buyDate.getDate())) {
+      return 'LTCG';
+    }
+  }
+  return 'STCG';
+}
+
 module.exports = {
   calculatePagination,
   calculateCapitalGainType,
@@ -126,5 +140,6 @@ module.exports = {
   generateReferenceNumber,
   isValidPAN,
   buildQuery,
-  getPaginationValues
+  getPaginationValues,
+  getGainType
 };

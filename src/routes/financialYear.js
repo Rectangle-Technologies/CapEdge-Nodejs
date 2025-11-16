@@ -32,7 +32,7 @@ const financialYearUpdateValidation = [
 ]
 
 router.get('/get-all', financialYearController.getFinancialYears);
-// TODO: Remove once transactions are done
+
 router.post('/create', financialYearValidation, handleValidationErrors, financialYearController.createFinancialYear);
 
 router.put('/update/:id', financialYearUpdateValidation, handleValidationErrors, financialYearController.updateFinancialYear);
