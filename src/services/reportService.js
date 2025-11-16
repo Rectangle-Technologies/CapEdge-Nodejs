@@ -1,6 +1,7 @@
 const DematAccount = require("../models/DematAccount");
 const FinancialYear = require("../models/FinancialYear");
 const Transaction = require("../models/Transaction");
+const { getGainType } = require("../utils/helpers");
 
 const getPnLRecords = async (data) => {
   // Logic to get P&L records
@@ -16,7 +17,7 @@ const getPnLRecords = async (data) => {
 
   // Validate financial year has required tax rates
   if (financialYear.ltcgRate === undefined || financialYear.ltcgRate === null ||
-      financialYear.stcgRate === undefined || financialYear.stcgRate === null) {
+    financialYear.stcgRate === undefined || financialYear.stcgRate === null) {
     const error = new Error('Financial Year tax rates are not configured');
     error.statusCode = 400;
     error.reasonCode = 'INVALID_DATA';
@@ -54,23 +55,26 @@ const getPnLRecords = async (data) => {
   const intradayBuyTransactionIds = currentFYTransactions
     .filter(txn => txn.deliveryType !== 'Delivery' && txn.type === 'BUY')
     .map(txn => txn._id);
-  
+
   const intradaySellMap = new Map();
   if (intradayBuyTransactionIds.length > 0) {
-    const intradaySellTransactions = await Transaction.find({ 
-      buyTransactionId: { $in: intradayBuyTransactionIds } 
+    const intradaySellTransactions = await Transaction.find({
+      buyTransactionId: { $in: intradayBuyTransactionIds }
     });
-    
+
     intradaySellTransactions.forEach(txn => {
       intradaySellMap.set(txn.buyTransactionId.toString(), txn);
     });
   }
 
   const result = {};
+  const currentDate = new Date();
+  const currentFY = await FinancialYear.findOne({
+    startDate: { $lte: currentDate },
+    endDate: { $gte: currentDate }
+  });
   result.startDate = financialYear.startDate;
-  result.endDate = currentFYTransactions.length > 0 
-    ? currentFYTransactions[currentFYTransactions.length - 1].date 
-    : financialYear.endDate;
+  result.endDate = currentFY._id.toString() === financialYear._id.toString() ? currentDate : financialYear.endDate;
 
   for (const txn of currentFYTransactions) {
     if (txn.deliveryType === 'Delivery') {
@@ -105,18 +109,13 @@ const getPnLRecords = async (data) => {
           }
 
           const resultType = txn.price >= holding.price ? 'gain' : 'loss';
-          const sellDate = new Date(txn.date);
-          const buyDate = new Date(holding.buyDate);
-          const daysHeld = Math.ceil((sellDate - buyDate) / (1000 * 60 * 60 * 24));
-          const gainType = daysHeld > 365 ? 'LTCG' : 'STCG';
+          const gainType = getGainType(holding.buyDate, txn.date, 'EQUITY');
           const taxableAmount = (txn.price - holding.price) * matchedQuantity;
           let calculatedTax = 0;
-          if (taxableAmount > 0) {
-            if (gainType === 'LTCG') {
-              calculatedTax = taxableAmount * financialYear.ltcgRate;
-            } else {
-              calculatedTax = taxableAmount * financialYear.stcgRate;
-            }
+          if (gainType === 'LTCG') {
+            calculatedTax = taxableAmount * financialYear.ltcgRate;
+          } else {
+            calculatedTax = taxableAmount * financialYear.stcgRate;
           }
 
           if (!result[txn.securityId]) {
@@ -152,9 +151,7 @@ const getPnLRecords = async (data) => {
           const gainType = 'STCG';
           const taxableAmount = (sellTransaction.price - txn.price) * txn.quantity;
           let calculatedTax = 0;
-          if (taxableAmount > 0) {
-            calculatedTax = taxableAmount * financialYear.stcgRate;
-          }
+          calculatedTax = taxableAmount * financialYear.stcgRate;
 
           if (!result[txn.securityId]) {
             result[txn.securityId] = [];

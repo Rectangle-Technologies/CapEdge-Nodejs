@@ -14,11 +14,12 @@ const exportToExcel = async (data, sheetName) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
-  // Helper to format date as dd/mm/yy using locale
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-GB');
+  // Helper to format date as dd/mm/yy using regex
+  const formatDate = (date) => {
+    if (!date) return '';
+    const isoString = date.toISOString();
+    const formattedDate = isoString.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1');
+    return formattedDate;
   };
   worksheet.mergeCells('A1:O1');
   worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
