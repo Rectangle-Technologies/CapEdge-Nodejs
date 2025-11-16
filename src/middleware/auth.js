@@ -2,31 +2,30 @@ const decode = require('@coconut-packages/jsonwebtoken/decode');
 const User = require('../models/User');
 
 // Helper function to create auth errors
-const createAuthError = (message, reasonCode = 'UNAUTHORIZED') => {
-  const error = new Error(message);
+const createAuthError = (reasonCode = 'UNAUTHORIZED') => {
+  const error = new Error('Unauthorized');
   error.statusCode = 401;
   error.reasonCode = reasonCode;
   return error;
 };
 
-// TODO: Change the message to generic message once development is done
 const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.get('Authorization');
 
     if (!authHeader) {
-      return next(createAuthError('No token provided'));
+      return next(createAuthError());
     }
 
     // Extract Bearer token
     const [scheme, token] = authHeader.split(' ');
     if (scheme !== 'Bearer' || !token) {
-      return next(createAuthError('Invalid token format'));
+      return next(createAuthError());
     }
 
     const decodedToken = decode(token, process.env.JWT_ENCRYPTION_KEY, process.env.JWT_SECRET, process.env.JWT_ENCRYPTION_IV);
     if (!decodedToken) {
-      return next(createAuthError('Invalid token'));
+      return next(createAuthError());
     }
 
     // Check if user still exists

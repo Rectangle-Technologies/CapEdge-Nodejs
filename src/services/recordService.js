@@ -4,7 +4,6 @@ const Transaction = require("../models/Transaction");
 const DematAccount = require("../models/DematAccount");
 const LedgerEntry = require("../models/LedgerEntry");
 
-// TODO: Remove logs when merging
 const updateRecords = async (transactionDate, dematAccountId, session) => {
     try {
         // Fetch the previous financial year
