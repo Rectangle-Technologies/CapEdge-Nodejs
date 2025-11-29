@@ -2,7 +2,7 @@ const ExcelJS = require('exceljs');
 const logger = require('../utils/logger');
 const Security = require('../models/Security');
 
-const exportToExcel = async (data, sheetName) => {
+const exportPnlToExcel = async (data, sheetName) => {
   const { startDate, endDate, ...securitiesData } = data;
   const securityIds = Object.keys(securitiesData);
   const securities = await Security.find({ _id: { $in: securityIds } }).select('name');
@@ -205,6 +205,180 @@ const exportToExcel = async (data, sheetName) => {
   return buffer;
 };
 
+const exportHoldingsToExcel = async (data, sheetName) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // Helper to format date as dd/mm/yyyy
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // INR Currency format
+  const inrFormat = '₹#,##0.00';
+
+  // Build dynamic columns based on number of demat accounts
+  const allDematAccounts = [];
+  data.forEach(security => {
+    security.dematAccounts.forEach(account => {
+      const key = `${account.userAccountName}-${account.brokerName}`;
+      if (!allDematAccounts.find(a => a.key === key)) {
+        allDematAccounts.push({
+          key,
+          label: account.accountLabel,
+          userAccountName: account.userAccountName,
+          brokerName: account.brokerName
+        });
+      }
+    });
+  });
+
+  // Sort accounts by userAccountName first, then by brokerName
+  allDematAccounts.sort((a, b) => {
+    const userCompare = a.userAccountName.localeCompare(b.userAccountName);
+    if (userCompare !== 0) return userCompare;
+    return a.brokerName.localeCompare(b.brokerName);
+  });
+
+  // Header row 1: Stock + Account labels (merged cells for each account)
+  let currentCol = 2; // Start from column B (column A is for Stock)
+  worksheet.getCell('A1').value = 'Stock';
+
+  allDematAccounts.forEach(account => {
+    const startCol = currentCol;
+    const endCol = currentCol + 3; // Date, Quantity, Price, Amount = 4 columns
+    worksheet.mergeCells(1, startCol, 1, endCol);
+    worksheet.getCell(1, startCol).value = account.label;
+    currentCol = endCol + 1;
+  });
+
+  // Header row 2: Column names for each account
+  currentCol = 2;
+  worksheet.getCell('A2').value = '';
+  allDematAccounts.forEach(() => {
+    worksheet.getCell(2, currentCol).value = 'Date';
+    worksheet.getCell(2, currentCol + 1).value = 'Quantity';
+    worksheet.getCell(2, currentCol + 2).value = 'Price';
+    worksheet.getCell(2, currentCol + 3).value = 'Amount';
+    currentCol += 4;
+  });
+
+  // Set column widths
+  worksheet.getColumn(1).width = 20; // Stock column
+  for (let col = 2; col <= 1 + (allDematAccounts.length * 4); col++) {
+    const colIndex = (col - 2) % 4;
+    if (colIndex === 0) worksheet.getColumn(col).width = 12; // Date
+    else if (colIndex === 1) worksheet.getColumn(col).width = 10; // Quantity
+    else if (colIndex === 2) worksheet.getColumn(col).width = 15; // Price
+    else worksheet.getColumn(col).width = 15; // Amount
+  }
+
+  // Populate data rows
+  let currentRow = 3;
+  data.forEach(security => {
+    // Create a map of holdings by demat account key
+    const holdingsMap = new Map();
+    security.dematAccounts.forEach(account => {
+      const key = `${account.userAccountName}-${account.brokerName}`;
+      holdingsMap.set(key, account);
+    });
+
+    // Find the maximum number of holdings (excluding Total) needed for this security
+    let maxHoldingsCount = 0;
+    security.dematAccounts.forEach(account => {
+      if (account.holdings.length > maxHoldingsCount) {
+        maxHoldingsCount = account.holdings.length;
+      }
+    });
+
+    // Write security name (will be merged for all rows of this security)
+    const securityStartRow = currentRow;
+    worksheet.getCell(`A${securityStartRow}`).value = security.securityName;
+
+    // Write holdings data for each account
+    allDematAccounts.forEach(account => {
+      const accountData = holdingsMap.get(account.key);
+      let accountCol = 2 + (allDematAccounts.indexOf(account) * 4);
+      let accountRow = currentRow;
+
+      if (accountData) {
+        // Write individual holdings
+        accountData.holdings.forEach((holding, index) => {
+          worksheet.getCell(accountRow + index, accountCol).value = formatDate(holding.buyDate);
+          worksheet.getCell(accountRow + index, accountCol + 1).value = holding.quantity;
+          worksheet.getCell(accountRow + index, accountCol + 2).value = holding.price;
+          worksheet.getCell(accountRow + index, accountCol + 2).numFmt = inrFormat;
+          worksheet.getCell(accountRow + index, accountCol + 3).value = holding.amount;
+          worksheet.getCell(accountRow + index, accountCol + 3).numFmt = inrFormat;
+        });
+
+        // Write Total row at the same level for all accounts (after all holdings)
+        const totalRow = currentRow + maxHoldingsCount;
+        worksheet.getCell(totalRow, accountCol).value = 'Total';
+        worksheet.getCell(totalRow, accountCol + 1).value = accountData.total.quantity;
+        worksheet.getCell(totalRow, accountCol + 2).value = accountData.total.price;
+        worksheet.getCell(totalRow, accountCol + 2).numFmt = inrFormat;
+        worksheet.getCell(totalRow, accountCol + 3).value = accountData.total.amount;
+        worksheet.getCell(totalRow, accountCol + 3).numFmt = inrFormat;
+      }
+    });
+
+    // Merge stock name cells vertically for all rows of this security (excluding Total row)
+    const securityEndRow = currentRow + maxHoldingsCount - 1;
+    if (securityEndRow > securityStartRow) {
+      worksheet.mergeCells(`A${securityStartRow}:A${securityEndRow}`);
+      // Add bottom border to the merged stock cell
+      worksheet.getCell(`A${securityEndRow}`).border = {
+        bottom: { style: 'thin' }
+      };
+    } else {
+      // Single row, add bottom border
+      worksheet.getCell(`A${securityStartRow}`).border = {
+        bottom: { style: 'thin' }
+      };
+    }
+
+    // Add top border to Total row (at the same level for all accounts)
+    const totalRow = currentRow + maxHoldingsCount;
+    allDematAccounts.forEach((account, index) => {
+      const accountCol = 2 + (index * 4);
+      
+      // Add top border to all 4 columns of the Total row
+      for (let col = accountCol; col < accountCol + 4; col++) {
+        worksheet.getCell(totalRow, col).border = {
+          top: { style: 'thin' }
+        };
+      }
+    });
+
+    const totalRowsForSecurity = maxHoldingsCount + 1; // +1 for Total row
+    currentRow += totalRowsForSecurity; // Move to next security
+    currentRow++; // Add blank row after each security
+  });
+
+  // Apply styling to header rows
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(2).font = { bold: true };
+  worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(2).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Apply alignment to stock column
+  for (let row = 3; row <= currentRow; row++) {
+    worksheet.getCell(`A${row}`).alignment = { vertical: 'middle' };
+  }
+
+  // Return buffer for download
+  const buffer = await workbook.xlsx.writeBuffer();
+  logger.info(`Holdings Excel buffer generated for download.`);
+  return buffer;
+}
+
 module.exports = {
-  exportToExcel
+  exportPnlToExcel,
+  exportHoldingsToExcel
 };

@@ -17,4 +17,7 @@ const pnlValidation = [
 // P&L Report Routes
 router.post('/pnl/export', pnlValidation, handleValidationErrors, reportController.exportPnLReport);
 
+// All holdings Report Routes
+router.get('/holdings/export', reportController.exportHoldingsReport);
+
 module.exports = router;

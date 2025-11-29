@@ -1,5 +1,6 @@
 const DematAccount = require("../models/DematAccount");
 const FinancialYear = require("../models/FinancialYear");
+const Holdings = require("../models/Holdings");
 const Transaction = require("../models/Transaction");
 const { getGainType } = require("../utils/helpers");
 
@@ -175,6 +176,105 @@ const getPnLRecords = async (data) => {
   return result;
 }
 
+const getHoldingsRecords = async () => {
+  // Fetch all holdings populated with dematAccountId and securityId details
+  const holdings = await Holdings.find()
+    .populate({
+      path: 'dematAccountId',
+      populate: [
+        { path: 'userAccountId' },
+        { path: 'brokerId' }
+      ]
+    })
+    .populate('securityId')
+    .exec();
+
+  // Group holdings by securityId, then by dematAccountId
+  const groupedData = {};
+
+  holdings.forEach(holding => {
+    const security = holding.securityId;
+    const securityId = security._id.toString();
+    const securityName = security.name;
+    const dematAccount = holding.dematAccountId;
+    const dematAccountId = dematAccount._id.toString();
+    const userAccountName = dematAccount.userAccountId.name;
+    const brokerName = dematAccount.brokerId.name;
+    const accountLabel = `${userAccountName} - ${brokerName}`;
+
+    // Initialize security group if it doesn't exist
+    if (!groupedData[securityId]) {
+      groupedData[securityId] = {
+        securityName,
+        securityId,
+        dematAccounts: {}
+      };
+    }
+
+    // Initialize demat account group if it doesn't exist
+    if (!groupedData[securityId].dematAccounts[dematAccountId]) {
+      groupedData[securityId].dematAccounts[dematAccountId] = {
+        accountLabel,
+        userAccountName,
+        brokerName,
+        dematAccountId,
+        holdings: []
+      };
+    }
+
+    // Add holding to the demat account group
+    groupedData[securityId].dematAccounts[dematAccountId].holdings.push({
+      buyDate: holding.buyDate,
+      quantity: holding.quantity,
+      price: holding.price,
+      amount: holding.quantity * holding.price
+    });
+  });
+
+  // Convert to array format and sort
+  const result = Object.values(groupedData)
+    .map(security => {
+      // Convert dematAccounts object to array and calculate totals
+      const dematAccountsArray = Object.values(security.dematAccounts).map(account => {
+        // Sort holdings by date
+        account.holdings.sort((a, b) => new Date(a.buyDate) - new Date(b.buyDate));
+        
+        // Calculate totals for this demat account
+        const totalQuantity = account.holdings.reduce((sum, h) => sum + h.quantity, 0);
+        const totalAmount = account.holdings.reduce((sum, h) => sum + h.amount, 0);
+        const avgPrice = totalAmount / totalQuantity;
+
+        return {
+          ...account,
+          total: {
+            quantity: totalQuantity,
+            price: avgPrice,
+            amount: totalAmount
+          }
+        };
+      });
+
+      // Sort demat accounts by userAccountName, then brokerName
+      dematAccountsArray.sort((a, b) => {
+        const userCompare = a.userAccountName.localeCompare(b.userAccountName);
+        if (userCompare !== 0) return userCompare;
+        return a.brokerName.localeCompare(b.brokerName);
+      });
+
+      return {
+        securityName: security.securityName,
+        securityId: security.securityId,
+        dematAccounts: dematAccountsArray
+      };
+    });
+
+  // Sort by security name
+  result.sort((a, b) => a.securityName.localeCompare(b.securityName));
+
+  return result;
+}
+
 module.exports = {
-  getPnLRecords
+  getPnLRecords,
+  getHoldingsRecords
 };
