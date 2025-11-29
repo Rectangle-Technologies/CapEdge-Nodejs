@@ -54,7 +54,12 @@ const addLedgerEntryValidation = [
   body('tradeTransactionId')
     .optional()
     .isMongoId()
-    .withMessage('Invalid trade transaction ID')
+    .withMessage('Invalid trade transaction ID'),
+  body('remarks')
+    .notEmpty()
+    .withMessage('Remarks are required')
+    .isString()
+    .withMessage('Remarks must be a string')
 ];
 
 // Routes

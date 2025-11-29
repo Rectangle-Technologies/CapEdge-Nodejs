@@ -121,13 +121,15 @@ const handleIntradayTransaction = async (transactionData, baseTransaction, trans
             dematAccountId: transactionData.dematAccountId,
             tradeTransactionId: buyTransaction._id,
             transactionAmount: -transactionData.buyPrice * transactionData.quantity,
-            date: transactionDate
+            date: transactionDate,
+            remarks: 'Intraday BUY, contract reference: ' + (transactionData.referenceNumber || '')
         },
         {
             dematAccountId: transactionData.dematAccountId,
             tradeTransactionId: sellTransaction._id,
             transactionAmount: transactionData.sellPrice * transactionData.quantity,
-            date: transactionDate
+            date: transactionDate,
+            remarks: 'Intraday SELL, contract reference: ' + (transactionData.referenceNumber || '')
         }
     ], { session });
 
@@ -146,7 +148,8 @@ const handleDeliveryTransaction = async (transactionData, baseTransaction, trans
         dematAccountId: transactionData.dematAccountId,
         tradeTransactionId: transaction._id,
         transactionAmount: (transactionData.type === 'BUY' ? -1 : 1) * transactionData.price * transactionData.quantity,
-        date: transactionDate
+        date: transactionDate,
+        remarks: transactionData.type + ' transaction, contract reference: ' + (transactionData.referenceNumber || '')
     }], { session });
 
     return [transaction];

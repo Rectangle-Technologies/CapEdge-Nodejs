@@ -126,6 +126,7 @@ const getLedgerEntries = async (filters = {}) => {
       date: 1,
       type: 1,
       transactionAmount: 1,
+      remarks: 1,
       tradeTransactionId: {
         $cond: [
           { $ne: ['$tradeTransactionId', null] },
@@ -166,7 +167,7 @@ const getLedgerEntries = async (filters = {}) => {
 };
 
 const addLedgerEntry = async (data) => {
-  const { dematAccountId, transactionAmount, date } = data;
+  const { dematAccountId, transactionAmount, date, remarks } = data;
 
   const dematAccount = await DematAccount.findById(dematAccountId);
   if (!dematAccount) {
@@ -187,7 +188,8 @@ const addLedgerEntry = async (data) => {
     const ledgerEntry = await LedgerEntry.create([{
       dematAccountId,
       transactionAmount,
-      date
+      date,
+      remarks
     }], { session });
 
     await updateRecords(date, dematAccountId, session);

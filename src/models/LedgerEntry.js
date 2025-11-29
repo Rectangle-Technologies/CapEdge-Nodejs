@@ -19,6 +19,11 @@ const ledgerEntrySchema = new mongoose.Schema({
     type: Date,
     required: [true, 'Date is required'],
   },
+  remarks: {
+    type: String,
+    trim: true,
+    required: [true, 'Remarks are required'],
+  },
 }, {
   timestamps: true
 });
