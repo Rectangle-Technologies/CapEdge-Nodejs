@@ -378,7 +378,111 @@ const exportHoldingsToExcel = async (data, sheetName) => {
   return buffer;
 }
 
+const exportLedgerToExcel = async (data, sheetName) => {
+  const { startDate, endDate, ledgerEntries } = data;
+  
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // Helper to format date as dd/mm/yyyy
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // INR Currency format
+  const inrFormat = '₹#,##0.00';
+
+  // Row 1: Period information
+  worksheet.mergeCells('A1:E1');
+  worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
+  worksheet.getCell('A1').font = { bold: true };
+  worksheet.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
+
+  // Row 2: Empty row for spacing
+  
+  // Row 3: Header row
+  worksheet.getCell('A3').value = 'Date';
+  worksheet.getCell('B3').value = 'Type';
+  worksheet.getCell('C3').value = 'Credit';
+  worksheet.getCell('D3').value = 'Debit';
+  worksheet.getCell('E3').value = 'Remarks';
+  
+  worksheet.getRow(3).font = { bold: true };
+  worksheet.getRow(3).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Set column widths
+  worksheet.columns = [
+    { key: 'A', width: 15 }, // Date
+    { key: 'B', width: 12 }, // Type
+    { key: 'C', width: 20 }, // Credit
+    { key: 'D', width: 20 }, // Debit
+    { key: 'E', width: 40 }, // Remarks
+  ];
+
+  // Sort ledger entries by date
+  const sortedEntries = [...ledgerEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Populate data rows
+  let currentRow = 4;
+  let totalCredit = 0;
+  let totalDebit = 0;
+
+  sortedEntries.forEach(entry => {
+    worksheet.getCell(`A${currentRow}`).value = formatDate(entry.date);
+    worksheet.getCell(`B${currentRow}`).value = entry.type || '';
+    
+    // Split amount into Credit and Debit columns
+    if (entry.transactionAmount > 0) {
+      worksheet.getCell(`C${currentRow}`).value = entry.transactionAmount;
+      worksheet.getCell(`C${currentRow}`).numFmt = inrFormat;
+      worksheet.getCell(`C${currentRow}`).font = { color: { argb: 'FF008000' } };
+      totalCredit += entry.transactionAmount;
+    } else if (entry.transactionAmount < 0) {
+      worksheet.getCell(`D${currentRow}`).value = Math.abs(entry.transactionAmount);
+      worksheet.getCell(`D${currentRow}`).numFmt = inrFormat;
+      worksheet.getCell(`D${currentRow}`).font = { color: { argb: 'FFFF0000' } };
+      totalDebit += Math.abs(entry.transactionAmount);
+    }
+    
+    worksheet.getCell(`E${currentRow}`).value = entry.remarks || '';
+    
+    currentRow++;
+  });
+
+  // Add total row with merged cells for "Total"
+  worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
+  worksheet.getCell(`A${currentRow}`).value = 'Total';
+  worksheet.getCell(`A${currentRow}`).font = { bold: true };
+  worksheet.getCell(`A${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+  
+  worksheet.getCell(`C${currentRow}`).value = totalCredit;
+  worksheet.getCell(`C${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`C${currentRow}`).font = { bold: true };
+  
+  worksheet.getCell(`D${currentRow}`).value = totalDebit;
+  worksheet.getCell(`D${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`D${currentRow}`).font = { bold: true };
+  
+  // Add border to total row
+  worksheet.getCell(`A${currentRow}`).border = { top: { style: 'thin' } };
+  worksheet.getCell(`B${currentRow}`).border = { top: { style: 'thin' } };
+  worksheet.getCell(`C${currentRow}`).border = { top: { style: 'thin' } };
+  worksheet.getCell(`D${currentRow}`).border = { top: { style: 'thin' } };
+  worksheet.getCell(`E${currentRow}`).border = { top: { style: 'thin' } };
+
+  // Return buffer for download
+  const buffer = await workbook.xlsx.writeBuffer();
+  logger.info(`Ledger Excel buffer generated for download.`);
+  return buffer;
+}
+
 module.exports = {
   exportPnlToExcel,
-  exportHoldingsToExcel
+  exportHoldingsToExcel,
+  exportLedgerToExcel
 };

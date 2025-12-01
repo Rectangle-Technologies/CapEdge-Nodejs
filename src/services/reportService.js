@@ -1,6 +1,7 @@
 const DematAccount = require("../models/DematAccount");
 const FinancialYear = require("../models/FinancialYear");
 const Holdings = require("../models/Holdings");
+const LedgerEntry = require("../models/LedgerEntry");
 const Transaction = require("../models/Transaction");
 const { getGainType } = require("../utils/helpers");
 
@@ -322,7 +323,82 @@ const getHoldingsRecords = async () => {
   return result;
 }
 
+const getLedgerRecords = async (dematAccountId, filters) => {
+  const dematAccount = await DematAccount.findById(dematAccountId);
+  if (!dematAccount) {
+    const error = new Error('Demat Account not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  const { startDate, endDate } = filters;
+
+  const matchQuery = { dematAccountId: dematAccount._id };
+  
+  if (startDate || endDate) {
+    matchQuery.date = {};
+    if (startDate) {
+      matchQuery.date.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      matchQuery.date.$lte = new Date(endDate);
+    }
+  }
+
+  const result = await LedgerEntry.aggregate([
+    { $match: matchQuery },
+    {
+      $lookup: {
+        from: 'transactions',
+        localField: 'tradeTransactionId',
+        foreignField: '_id',
+        as: 'transaction'
+      }
+    },
+    {
+      $unwind: {
+        path: '$transaction',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $addFields: {
+        type: {
+          $ifNull: [
+            '$transaction.type',
+            {
+              $cond: {
+                if: { $gt: ['$transactionAmount', 0] },
+                then: 'CREDIT',
+                else: 'DEBIT'
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      $project: {
+        date: 1,
+        dematAccountId: 1,
+        transactionAmount: 1,
+        remarks: 1,
+        tradeTransactionId: 1,
+        type: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    },
+    { $sort: { date: 1, createdAt: 1 } }
+  ]);
+
+  return result;
+}
+
+
 module.exports = {
   getPnLRecords,
-  getHoldingsRecords
+  getHoldingsRecords,
+  getLedgerRecords
 };
