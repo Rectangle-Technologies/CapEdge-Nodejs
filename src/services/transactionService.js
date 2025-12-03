@@ -105,7 +105,8 @@ const handleIntradayTransaction = async (transactionData, baseTransaction, trans
         ...baseTransaction,
         type: 'BUY',
         quantity: transactionData.quantity,
-        price: transactionData.buyPrice
+        price: transactionData.buyPrice,
+        transactionCost: transactionData.transactionCost / 2 || 0
     }], { session });
 
     const [sellTransaction] = await Transaction.create([{
@@ -113,7 +114,8 @@ const handleIntradayTransaction = async (transactionData, baseTransaction, trans
         type: 'SELL',
         quantity: transactionData.quantity,
         price: transactionData.sellPrice,
-        buyTransactionId: buyTransaction._id  
+        buyTransactionId: buyTransaction._id,
+        transactionCost: transactionData.transactionCost / 2 || 0  
     }], { session });
 
     await LedgerEntry.create([
@@ -252,7 +254,6 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
 };
 
 const createTransactions = async (transactions) => {
-    console.log('Transaction costs: ', transactions.map(tx => tx.transactionCost || 0));
     // Execute with retry logic
     return await executeTransactionWithRetry(async (session) => {
         const result = [];
@@ -263,18 +264,14 @@ const createTransactions = async (transactions) => {
         }
 
         const totalTransactionCost = result.reduce((sum, tx) => sum + (tx.transactionCost || 0), 0);
-        console.log('Total transaction cost for all transactions:', totalTransactionCost);
-        console.log('Transaction costs: ', result.map(tx => tx.transactionCost || 0));
-        const remarks = `Transaction cost for ${transactions[0]?.referenceNumber || 'transaction'}`;
+        const remarks = `Charges for ${transactions[0]?.referenceNumber || 'transaction'}`;
         if (totalTransactionCost > 0) {
-            var ledgerEntry = await LedgerEntry.create([{
+            await LedgerEntry.create([{
                 dematAccountId: result[0].dematAccountId,
                 transactionAmount: -totalTransactionCost,
                 remarks: remarks,
                 date: result[0].date
             }], { session });
-
-            console.log('Created ledger entry for transaction cost:', ledgerEntry);
         }
 
         await updateRecords(result[0].date, result[0].dematAccountId, session);

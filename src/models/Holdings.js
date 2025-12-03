@@ -19,6 +19,10 @@ const holdingsSchema = new mongoose.Schema({
     required: [true, 'Buy price is required'],
     set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
   },
+  transactionCost: {
+    type: Number,
+    default: 0,
+  },
   securityId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Security',

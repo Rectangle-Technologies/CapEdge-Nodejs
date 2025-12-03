@@ -52,6 +52,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                             buyDate: fyTransaction.date,
                             quantity: fyTransaction.quantity,
                             price: fyTransaction.price,
+                            transactionCost: fyTransaction.transactionCost || 0,
                             securityId: fyTransaction.securityId,
                             transactionId: fyTransaction._id,
                             dematAccountId: fyTransaction.dematAccountId,

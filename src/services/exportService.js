@@ -21,16 +21,22 @@ const exportPnlToExcel = async (data, sheetName) => {
     const formattedDate = isoString.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1');
     return formattedDate;
   };
-  worksheet.mergeCells('A1:O1');
+  worksheet.mergeCells('A1:Q1');
   worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
   worksheet.getCell('A3').value = 'Stock';
   worksheet.mergeCells('B3:E3'); worksheet.getCell('B3').value = 'Buy';
   worksheet.mergeCells('F3:I3'); worksheet.getCell('F3').value = 'Sell';
   worksheet.mergeCells('J3:K3'); worksheet.getCell('J3').value = 'Gain';
   worksheet.mergeCells('L3:M3'); worksheet.getCell('L3').value = 'Loss';
-  worksheet.mergeCells('N3:O3'); worksheet.getCell('N3').value = 'Tax';
+  worksheet.getCell('N3').value = 'Charges';
+  worksheet.getCell('O3').value = 'Taxable Amount';
+  worksheet.mergeCells('P3:Q3'); worksheet.getCell('P3').value = 'Tax';
+  
+  // Make row 3 bold
+  worksheet.getRow(3).font = { bold: true };
+  
   worksheet.getRow(4).values = [
-    '', 'Date', 'Quantity', 'Price', 'Amount', 'Date', 'Quantity', 'Price', 'Amount', 'Long Term', 'Short Term', 'Long Term', 'Short Term', 'Long Term', 'Short Term'
+    '', 'Date', 'Quantity', 'Price', 'Amount', 'Date', 'Quantity', 'Price', 'Amount', 'Long Term', 'Short Term', 'Long Term', 'Short Term', '', '', 'Long Term', 'Short Term'
   ];
 
   // Set column widths
@@ -48,8 +54,10 @@ const exportPnlToExcel = async (data, sheetName) => {
     { key: 'K', width: 15 }, // Gain Short Term
     { key: 'L', width: 15 }, // Loss Long Term
     { key: 'M', width: 15 }, // Loss Short Term
-    { key: 'N', width: 15 }, // Tax Long Term
-    { key: 'O', width: 15 }, // Tax Short Term
+    { key: 'N', width: 15 }, // Charges
+    { key: 'O', width: 15 }, // Taxable Amount
+    { key: 'P', width: 15 }, // Tax Long Term
+    { key: 'Q', width: 15 }, // Tax Short Term
   ];
 
   // INR Currency format
@@ -61,6 +69,8 @@ const exportPnlToExcel = async (data, sheetName) => {
   let totalGainShort = 0;
   let totalLossLong = 0;
   let totalLossShort = 0;
+  let totalCharges = 0;
+  let totalTaxableAmount = 0;
   let totalTaxLong = 0;
   let totalTaxShort = 0;
 
@@ -69,7 +79,7 @@ const exportPnlToExcel = async (data, sheetName) => {
     const transactions = securitiesData[securityId];
     const securityName = securityMap[securityId] || 'Unknown';
     worksheet.getCell(`A${currentRow}`).value = securityName;
-    let secBuyAmount = 0, secSellAmount = 0, secGainLong = 0, secGainShort = 0, secLossLong = 0, secLossShort = 0, secTaxLong = 0, secTaxShort = 0;
+    let secBuyAmount = 0, secSellAmount = 0, secGainLong = 0, secGainShort = 0, secLossLong = 0, secLossShort = 0, secCharges = 0, secTaxableAmount = 0, secTaxLong = 0, secTaxShort = 0;
 
     for (const tx of transactions) {
       worksheet.getCell(`B${currentRow}`).value = tx.buyDate ? formatDate(tx.buyDate) : '';
@@ -88,34 +98,55 @@ const exportPnlToExcel = async (data, sheetName) => {
       worksheet.getCell(`I${currentRow}`).value = sellAmount || null;
       worksheet.getCell(`I${currentRow}`).numFmt = inrFormat;
       secSellAmount += sellAmount;
+      
+      const charges = tx.transactionCost || 0;
+      let gainLossAmount = 0;
+      let taxableAmount = 0;
+      
       if (tx.resultType === 'gain') {
+        gainLossAmount = sellAmount - buyAmount;
+        taxableAmount = gainLossAmount - charges;
         if (tx.gainType === 'LTCG') {
-          worksheet.getCell(`J${currentRow}`).value = sellAmount - buyAmount;
+          worksheet.getCell(`J${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`J${currentRow}`).numFmt = inrFormat;
-          secGainLong += (sellAmount - buyAmount);
+          secGainLong += gainLossAmount;
         } else {
-          worksheet.getCell(`K${currentRow}`).value = sellAmount - buyAmount;
+          worksheet.getCell(`K${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`K${currentRow}`).numFmt = inrFormat;
-          secGainShort += (sellAmount - buyAmount);
+          secGainShort += gainLossAmount;
         }
       } else if (tx.resultType === 'loss') {
+        gainLossAmount = buyAmount - sellAmount;
+        taxableAmount = -(gainLossAmount + charges); // Negative for loss (loss + charges)
         if (tx.gainType === 'LTCG') {
-          worksheet.getCell(`L${currentRow}`).value = buyAmount - sellAmount;
+          worksheet.getCell(`L${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`L${currentRow}`).numFmt = inrFormat;
-          secLossLong += (buyAmount - sellAmount);
+          secLossLong += gainLossAmount;
         } else {
-          worksheet.getCell(`M${currentRow}`).value = buyAmount - sellAmount;
+          worksheet.getCell(`M${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`M${currentRow}`).numFmt = inrFormat;
-          secLossShort += (buyAmount - sellAmount);
+          secLossShort += gainLossAmount;
         }
       }
+      
+      // Charges
+      worksheet.getCell(`N${currentRow}`).value = charges;
+      worksheet.getCell(`N${currentRow}`).numFmt = inrFormat;
+      secCharges += charges;
+      
+      // Taxable Amount
+      worksheet.getCell(`O${currentRow}`).value = taxableAmount;
+      worksheet.getCell(`O${currentRow}`).numFmt = inrFormat;
+      secTaxableAmount += taxableAmount;
+      
+      // Tax
       if (tx.gainType === 'LTCG') {
-        worksheet.getCell(`N${currentRow}`).value = tx.calculatedTax || 0;
-        worksheet.getCell(`N${currentRow}`).numFmt = inrFormat;
+        worksheet.getCell(`P${currentRow}`).value = tx.calculatedTax || 0;
+        worksheet.getCell(`P${currentRow}`).numFmt = inrFormat;
         secTaxLong += tx.calculatedTax || 0;
       } else {
-        worksheet.getCell(`O${currentRow}`).value = tx.calculatedTax || 0;
-        worksheet.getCell(`O${currentRow}`).numFmt = inrFormat;
+        worksheet.getCell(`Q${currentRow}`).value = tx.calculatedTax || 0;
+        worksheet.getCell(`Q${currentRow}`).numFmt = inrFormat;
         secTaxShort += tx.calculatedTax || 0;
       }
       currentRow++;
@@ -126,6 +157,8 @@ const exportPnlToExcel = async (data, sheetName) => {
     totalGainShort += secGainShort;
     totalLossLong += secLossLong;
     totalLossShort += secLossShort;
+    totalCharges += secCharges;
+    totalTaxableAmount += secTaxableAmount;
     totalTaxLong += secTaxLong;
     totalTaxShort += secTaxShort;
     currentRow++;
@@ -143,10 +176,14 @@ const exportPnlToExcel = async (data, sheetName) => {
   worksheet.getCell(`L${currentRow}`).numFmt = inrFormat;
   worksheet.getCell(`M${currentRow}`).value = totalLossShort;
   worksheet.getCell(`M${currentRow}`).numFmt = inrFormat;
-  worksheet.getCell(`N${currentRow}`).value = totalTaxLong;
+  worksheet.getCell(`N${currentRow}`).value = totalCharges;
   worksheet.getCell(`N${currentRow}`).numFmt = inrFormat;
-  worksheet.getCell(`O${currentRow}`).value = totalTaxShort;
+  worksheet.getCell(`O${currentRow}`).value = totalTaxableAmount;
   worksheet.getCell(`O${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`P${currentRow}`).value = totalTaxLong;
+  worksheet.getCell(`P${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`Q${currentRow}`).value = totalTaxShort;
+  worksheet.getCell(`Q${currentRow}`).numFmt = inrFormat;
 
   // Iterate over the entries security wise. Start from the last entry of every security and move upwards. If the buyDate and price is same as previous, add the quantity and amount and remove the row
   let trackingRow = 5;
@@ -195,8 +232,10 @@ const exportPnlToExcel = async (data, sheetName) => {
     worksheet.getCell(`K${row}`).numFmt = inrFormat; // Gain Short Term
     worksheet.getCell(`L${row}`).numFmt = inrFormat; // Loss Long Term
     worksheet.getCell(`M${row}`).numFmt = inrFormat; // Loss Short Term
-    worksheet.getCell(`N${row}`).numFmt = inrFormat; // Tax Long Term
-    worksheet.getCell(`O${row}`).numFmt = inrFormat; // Tax Short Term
+    worksheet.getCell(`N${row}`).numFmt = inrFormat; // Charges
+    worksheet.getCell(`O${row}`).numFmt = inrFormat; // Taxable Amount
+    worksheet.getCell(`P${row}`).numFmt = inrFormat; // Tax Long Term
+    worksheet.getCell(`Q${row}`).numFmt = inrFormat; // Tax Short Term
   }
 
   // Return buffer instead of saving to disk

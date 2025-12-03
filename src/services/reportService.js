@@ -55,7 +55,7 @@ const getPnLRecords = async (data) => {
 
   // Fetch all intraday sell transactions upfront for performance
   const intradayBuyTransactionIds = currentFYTransactions
-    .filter(txn => txn.deliveryType !== 'Delivery' && txn.type === 'BUY')
+    .filter(txn => txn.deliveryType === 'Intraday' && txn.type === 'BUY')
     .map(txn => txn._id);
 
   const intradaySellMap = new Map();
@@ -112,7 +112,7 @@ const getPnLRecords = async (data) => {
 
           const resultType = txn.price >= holding.price ? 'gain' : 'loss';
           const gainType = getGainType(holding.buyDate, txn.date, 'EQUITY');
-          const taxableAmount = (txn.price - holding.price) * matchedQuantity;
+          const taxableAmount = ((txn.price - holding.price) * matchedQuantity) - txn.transactionCost - holding.transactionCost;
           let calculatedTax = 0;
           if (gainType === 'LTCG') {
             calculatedTax = taxableAmount * financialYear.ltcgRate;
@@ -129,6 +129,7 @@ const getPnLRecords = async (data) => {
             quantity: matchedQuantity,
             buyPrice: holding.price,
             sellPrice: txn.price,
+            transactionCost: (txn.transactionCost || 0) + (holding.transactionCost || 0),
             transactionId: txn._id,
             resultType,
             gainType,
@@ -151,7 +152,7 @@ const getPnLRecords = async (data) => {
         if (sellTransaction) {
           const resultType = sellTransaction.price >= txn.price ? 'gain' : 'loss';
           const gainType = 'STCG';
-          const taxableAmount = (sellTransaction.price - txn.price) * txn.quantity;
+          const taxableAmount = ((sellTransaction.price - txn.price) * txn.quantity) - (sellTransaction.transactionCost || 0) - (txn.transactionCost || 0);
           let calculatedTax = 0;
           calculatedTax = taxableAmount * financialYear.stcgRate;
 
@@ -163,6 +164,7 @@ const getPnLRecords = async (data) => {
             sellDate: sellTransaction.date,
             quantity: txn.quantity,
             buyPrice: txn.price,
+            transactionCost: (sellTransaction.transactionCost || 0) + (txn.transactionCost || 0),
             sellPrice: sellTransaction.price,
             transactionId: sellTransaction._id,
             resultType,
