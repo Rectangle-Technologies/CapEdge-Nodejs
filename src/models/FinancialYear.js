@@ -5,13 +5,11 @@ const reportSchema = new mongoose.Schema({
   holdings: [holdingsSchema],
   openingBalance: {
     type: Number,
-    required: [true, 'Opening balance is required'],
-    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+    required: [true, 'Opening balance is required']
   },
   closingBalance: {
     type: Number,
-    required: [true, 'Closing balance is required'],
-    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+    required: [true, 'Closing balance is required']
   }
 })
 

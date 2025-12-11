@@ -12,8 +12,7 @@ const ledgerEntrySchema = new mongoose.Schema({
   },
   transactionAmount: {
     type: Number,
-    required: [true, 'Transaction amount is required'],
-    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+    required: [true, 'Transaction amount is required']
   },
   date: {
     type: Date,

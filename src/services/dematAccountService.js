@@ -98,7 +98,7 @@ const createDematAccount = async (accountData) => {
   const dematAccount = new DematAccount({
     userAccountId,
     brokerId,
-    balance: parseFloat(balance).toFixed(2)
+    balance: parseFloat(balance)
   });
 
   await dematAccount.save();

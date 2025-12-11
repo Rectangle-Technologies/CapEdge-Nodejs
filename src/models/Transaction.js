@@ -28,8 +28,7 @@ const transactionSchema = new mongoose.Schema({
   },
   price: {
     type: Number,
-    required: [true, 'Price is required'],
-    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+    required: [true, 'Price is required']
   },
   securityId: {
     type: mongoose.Schema.Types.ObjectId,

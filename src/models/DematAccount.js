@@ -16,8 +16,7 @@ const dematAccountSchema = new mongoose.Schema({
   balance: {
     type: Number,
     required: [true, 'Balance is required'],
-    min: [0, 'Balance cannot be negative'],
-    set: value => Math.round(value * 100) / 100 // Round to 2 decimal places
+    min: [0, 'Balance cannot be negative']
   }
 }, {
   timestamps: true
