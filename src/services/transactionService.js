@@ -35,7 +35,7 @@ const getTransactions = async (filters = {}) => {
         query.financialYearId = financialYearId;
     }
     const options = {
-        sort: { date: -1, createdAt: -1 },
+        sort: { date: 1, createdAt: 1 },
         skip: limit ? (pageNo - 1) * limit : 0,
         limit: limit ? parseInt(limit) : 0
     };
