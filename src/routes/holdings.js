@@ -19,6 +19,10 @@ const getHoldingsValidation = [
     .optional()
     .isMongoId()
     .withMessage('Invalid user account ID format'),
+  query('financialYearId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid financial year ID format'),
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })

@@ -12,6 +12,7 @@ const getHoldings = async (req, res, next) => {
       securityId: req.query.securityId,
       dematAccountId: req.query.dematAccountId,
       userAccountId: req.query.userAccountId,
+      financialYearId: req.query.financialYearId,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
