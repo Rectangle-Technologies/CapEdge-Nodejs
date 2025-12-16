@@ -6,8 +6,10 @@ const exportPnLReport = async (req, res, next) => {
   try {
     const result = await reportService.getPnLRecords(req.body);
     const buffer = await exportService.exportPnlToExcel(result, 'PnL_Report.xlsx');
+
     res.setHeader('Content-Disposition', 'attachment; filename="PnL_Report.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
     return res.send(buffer);
   } catch (error) {
     next(error);
@@ -16,10 +18,14 @@ const exportPnLReport = async (req, res, next) => {
 
 const exportHoldingsReport = async (req, res, next) => {
   try {
-    const result = await reportService.getHoldingsRecords();
+    const { financialYearId } = req.query;
+
+    const result = await reportService.getHoldingsRecords(financialYearId);
     const buffer = await exportService.exportHoldingsToExcel(result, 'Holdings_Report.xlsx');
+
     res.setHeader('Content-Disposition', 'attachment; filename="Holdings_Report.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
     return res.send(buffer);
   } catch (error) {
     next(error);
@@ -32,8 +38,10 @@ const exportLedgerReport = async (req, res, next) => {
     const buffer = await exportService.exportLedgerToExcel({
       ledgerEntries: result, startDate: req.query.startDate, endDate: req.query.endDate
     }, 'Ledger_Report.xlsx');
+
     res.setHeader('Content-Disposition', 'attachment; filename="Ledger_Report.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
     return res.send(buffer);
   } catch (error) {
     next(error);
