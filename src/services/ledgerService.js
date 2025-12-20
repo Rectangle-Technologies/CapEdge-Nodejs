@@ -134,7 +134,8 @@ const getLedgerEntries = async (filters = {}) => {
             _id: '$transaction._id',
             securityName: '$security.name',
             quantity: '$transaction.quantity',
-            price: '$transaction.price'
+            price: '$transaction.price',
+            referenceNumber: '$transaction.referenceNumber',
           },
           null
         ]
