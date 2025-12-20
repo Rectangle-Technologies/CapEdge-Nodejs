@@ -147,6 +147,10 @@ const handleDeliveryTransaction = async (transactionData, baseTransaction, trans
         transactionCost: transactionData.transactionCost || 0
     }], { session });
 
+    if (transactionData.isIpo) {
+        return [transaction];
+    }
+
     await LedgerEntry.create([{
         dematAccountId: transactionData.dematAccountId,
         tradeTransactionId: transaction._id,
