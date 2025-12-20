@@ -67,6 +67,10 @@ const transactionSchema = new mongoose.Schema({
   transactionCost: {
     type: Number,
     default: 0
+  },
+  isIpo: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true
