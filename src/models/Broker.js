@@ -9,16 +9,12 @@ const brokerSchema = new mongoose.Schema({
   },
   panNumber: {
     type: String,
-    required: [true, 'PAN number is required'],
-    unique: true,
     uppercase: true,
-    match: [/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN number format. Format: ABCDE1234F']
+    trim: true
   },
   address: {
     type: String,
-    required: [true, 'Address is required'],
     trim: true,
-    maxlength: [500, 'Address cannot exceed 500 characters']
   }
 }, {
   timestamps: true

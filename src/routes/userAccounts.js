@@ -12,14 +12,8 @@ const userAccountValidation = [
     .withMessage('User account name is required')
     .trim(),
   body('panNumber')
-    .notEmpty()
-    .withMessage('PAN number is required')
-    .trim()
-    .matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i)
-    .withMessage('Invalid PAN number format. Format: ABCDE1234F'),
+    .trim(),
   body('address')
-    .notEmpty()
-    .withMessage('Address is required')
     .trim()
 ];
 
