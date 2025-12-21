@@ -21,7 +21,6 @@ const brokerSchema = new mongoose.Schema({
 });
 
 // Indexes
-brokerSchema.index({ panNumber: 1 }, { unique: true });
 brokerSchema.index({ name: 'text' }); // Text search index
 
 module.exports = mongoose.model('Broker', brokerSchema);

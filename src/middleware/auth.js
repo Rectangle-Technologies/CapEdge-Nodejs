@@ -19,7 +19,6 @@ const authMiddleware = async (req, res, next) => {
 
     // Extract Bearer token
     const [scheme, token] = authHeader.split(' ');
-    console.log(scheme, token); 
     if (scheme !== 'Bearer' || !token) {
       return next(createAuthError());
     }

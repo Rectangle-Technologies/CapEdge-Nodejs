@@ -21,7 +21,6 @@ const userAccountSchema = new mongoose.Schema({
 });
 
 // Indexes
-userAccountSchema.index({ panNumber: 1 }, { unique: true });
 userAccountSchema.index({ name: 'text' });
 
 module.exports = mongoose.model('UserAccount', userAccountSchema);
