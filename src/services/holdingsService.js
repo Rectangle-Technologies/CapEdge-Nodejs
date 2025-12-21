@@ -218,6 +218,60 @@ const getHoldings = async (filters = {}) => {
   };
 };
 
+const getHoldingsForSplit = async (securityId) => {
+  // Check if security exists
+  const security = await Security.findById(securityId);
+  if (!security) {
+    throw new Error('Security not found');
+  }
+
+  const query = { securityId };
+
+  const holdings = await Holdings.find(query)
+    .populate('securityId')
+    .populate({
+      path: 'dematAccountId',
+      populate: [
+        { path: 'brokerId' },
+        { path: 'userAccountId' }
+      ]
+    })
+    .sort({ buyDate: 1 })
+    .lean();
+
+  // Group by dematAccountId
+  const groupedHoldings = holdings.reduce((acc, holding) => {
+    const dematId = holding.dematAccountId?._id?.toString();
+    if (!acc[dematId]) {
+      acc[dematId] = [];
+    }
+    acc[dematId].push(holding);
+    return acc;
+  }, {});
+
+  // Transform to array format with title and entries
+  const response = Object.values(groupedHoldings).map(dematHoldings => {
+    const firstHolding = dematHoldings[0];
+    const userName = firstHolding.dematAccountId?.userAccountId?.name || 'Unknown User';
+    const brokerName = firstHolding.dematAccountId?.brokerId?.name || 'Unknown Broker';
+    
+    return {
+      title: `${userName} - ${brokerName}`,
+      entries: dematHoldings.map(holding => ({
+        buyDate: holding.buyDate,
+        quantity: holding.quantity,
+        transactionId: holding.transactionId
+      }))
+    };
+  });
+
+  return {
+    securityName: security.name,
+    holdings: response
+  };
+}
+
 module.exports = {
-  getHoldings
+  getHoldings,
+  getHoldingsForSplit
 };

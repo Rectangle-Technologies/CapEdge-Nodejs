@@ -24,6 +24,18 @@ const getHoldings = async (req, res, next) => {
   }
 };
 
+const getHoldingsForSplit = async (req, res, next) => {
+  try {
+    const { securityId } = req.params;
+    const result = await holdingsService.getHoldingsForSplit(securityId);
+    
+    return ApiResponse.success(res, result, 'Holdings for split retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
-  getHoldings
+  getHoldings,
+  getHoldingsForSplit
 };

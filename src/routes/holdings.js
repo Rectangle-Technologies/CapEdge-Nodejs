@@ -45,4 +45,6 @@ const getHoldingsValidation = [
  */
 router.get('/get-all', getHoldingsValidation, handleValidationErrors, holdingsController.getHoldings);
 
+router.get('/for-split/:securityId', holdingsController.getHoldingsForSplit);
+
 module.exports = router;
