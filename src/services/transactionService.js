@@ -144,7 +144,8 @@ const handleDeliveryTransaction = async (transactionData, baseTransaction, trans
         type: transactionData.type,
         quantity: transactionData.quantity,
         price: transactionData.price,
-        transactionCost: transactionData.transactionCost || 0
+        transactionCost: transactionData.transactionCost || 0,
+        isIpo: transactionData.isIpo || false
     }], { session });
 
     if (transactionData.isIpo) {
@@ -269,7 +270,7 @@ const createTransactions = async (transactions) => {
 
         const totalTransactionCost = result.reduce((sum, tx) => sum + (tx.transactionCost || 0), 0);
         const remarks = `Charges for ${transactions[0]?.referenceNumber || 'transaction'}`;
-        if (totalTransactionCost > 0) {
+        if (totalTransactionCost > 0 && !transactions[0]?.isIpo) {
             await LedgerEntry.create([{
                 dematAccountId: result[0].dematAccountId,
                 transactionAmount: -totalTransactionCost,
