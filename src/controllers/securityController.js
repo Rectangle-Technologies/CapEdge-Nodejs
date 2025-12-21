@@ -1,5 +1,4 @@
 const securityService = require('../services/securityService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 const getSecurities = async (req, res, next) => {

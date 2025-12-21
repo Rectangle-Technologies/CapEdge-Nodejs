@@ -1,5 +1,4 @@
 const ExcelJS = require('exceljs');
-const logger = require('../utils/logger');
 const Security = require('../models/Security');
 
 const exportPnlToExcel = async (data, sheetName) => {
@@ -240,7 +239,7 @@ const exportPnlToExcel = async (data, sheetName) => {
 
   // Return buffer instead of saving to disk
   const buffer = await workbook.xlsx.writeBuffer();
-  logger.info(`Excel buffer generated for download.`);
+  console.log(`Excel buffer generated for download.`);
   return buffer;
 };
 
@@ -413,7 +412,7 @@ const exportHoldingsToExcel = async (data, sheetName) => {
 
   // Return buffer for download
   const buffer = await workbook.xlsx.writeBuffer();
-  logger.info(`Holdings Excel buffer generated for download.`);
+  console.log(`Holdings Excel buffer generated for download.`);
   return buffer;
 }
 
@@ -516,7 +515,7 @@ const exportLedgerToExcel = async (data, sheetName) => {
 
   // Return buffer for download
   const buffer = await workbook.xlsx.writeBuffer();
-  logger.info(`Ledger Excel buffer generated for download.`);
+  console.log(`Ledger Excel buffer generated for download.`);
   return buffer;
 }
 

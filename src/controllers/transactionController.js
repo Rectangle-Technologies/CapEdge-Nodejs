@@ -1,5 +1,4 @@
 const transactionService = require('../services/transactionService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 const getTransactions = async (req, res, next) => {

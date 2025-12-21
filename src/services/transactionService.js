@@ -7,7 +7,6 @@ const Holdings = require('../models/Holdings');
 const { findOrCreateFinancialYear } = require('./financialYearService');
 const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
-const logger = require("../utils/logger");
 const { created } = require('../utils/response');
 
 const getTransactions = async (filters = {}) => {

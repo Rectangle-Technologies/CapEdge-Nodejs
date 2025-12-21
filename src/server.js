@@ -7,7 +7,6 @@ require('express-async-errors');
 require('dotenv').config();
 
 const connectDB = require('./config/database');
-const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const authMiddleware = require('./middleware/auth');
 const ApiResponse = require('./utils/response');
@@ -108,8 +107,8 @@ const startServer = async () => {
       
       await connectDB();
     } catch (dbError) {
-      logger.warn('MongoDB connection failed, starting server without database:', dbError.message);
-      logger.warn('Please start MongoDB and restart the server for full functionality');
+      console.warn('MongoDB connection failed, starting server without database:', dbError.message);
+      console.warn('Please start MongoDB and restart the server for full functionality');
     }
     
     app.listen(PORT, () => {
@@ -121,7 +120,7 @@ const startServer = async () => {
       }
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 };

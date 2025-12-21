@@ -1,5 +1,4 @@
 const brokerService = require('../services/brokerService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 /**

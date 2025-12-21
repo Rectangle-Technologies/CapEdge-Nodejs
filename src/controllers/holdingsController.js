@@ -1,5 +1,4 @@
 const holdingsService = require('../services/holdingsService');
-const logger = require('../utils/logger');
 const ApiResponse = require('../utils/response');
 
 /**

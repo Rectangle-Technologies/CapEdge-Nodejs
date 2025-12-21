@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
@@ -27,11 +26,11 @@ const connectDB = async () => {
 
     // MongoDB connection events
     mongoose.connection.on('error', (err) => {
-      logger.error('MongoDB connection error:', err);
+      console.error('MongoDB connection error:', err);
     });
 
     mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected');
+      console.warn('MongoDB disconnected');
     });
 
     mongoose.connection.on('reconnected', () => {
@@ -47,7 +46,7 @@ const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    logger.error('Database connection failed:', error);
+    console.error('Database connection failed:', error);
     throw error;
   }
 };

@@ -1,5 +1,3 @@
-const logger = require('../utils/logger');
-
 const errorHandler = (err, req, res, next) => {
   // Handle JSON parsing errors from body-parser
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
