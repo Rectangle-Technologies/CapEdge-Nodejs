@@ -57,12 +57,6 @@ const createBroker = async (brokerData) => {
     panNumber: panNumber.toUpperCase() 
   });
   
-  if (existingBroker) {
-    const error = new Error('Broker with this PAN number already exists');
-    error.statusCode = 400;
-    error.reasonCode = 'ALREADY_EXISTS';
-    throw error;
-  }
 
   // Create broker
   const broker = new Broker({

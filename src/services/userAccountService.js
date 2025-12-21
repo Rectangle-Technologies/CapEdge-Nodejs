@@ -127,13 +127,6 @@ const createUserAccount = async (userData) => {
   // Check if PAN already exists
   const existingUser = await UserAccount.findOne({ panNumber: panNumber.toUpperCase() });
 
-  if (existingUser) {
-    const error = new Error('User account with this PAN number already exists');
-    error.statusCode = 409;
-    error.reasonCode = 'ALREADY_EXISTS';
-    throw error;
-  }
-
   // Create user account
   const userAccount = new UserAccount({
     name,
