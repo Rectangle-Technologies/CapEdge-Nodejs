@@ -1,6 +1,38 @@
 const mongoose = require('mongoose');
 const { SECURITY_TYPES_ARRAY, DERIVATIVE_TYPES } = require('../constants');
 
+// Schema for split history records
+const splitHistorySchema = new mongoose.Schema({
+  splitDate: {
+    type: Date,
+    required: true
+  },
+  oldFaceValue: {
+    type: Number,
+    required: true
+  },
+  newFaceValue: {
+    type: Number,
+    required: true
+  },
+  splitRatio: {
+    type: String, // e.g., "1:2" means 1 old share becomes 2 new shares
+    required: true
+  },
+  transactionsUpdated: {
+    type: Number,
+    default: 0
+  },
+  holdingsUpdated: {
+    type: Number,
+    default: 0
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: true });
+
 const securitySchema = new mongoose.Schema({
   name: {
     type: String,
@@ -16,6 +48,8 @@ const securitySchema = new mongoose.Schema({
       message: 'Security type must be one of: ' + SECURITY_TYPES_ARRAY.join(', ')
     }
   },
+  // Split history for the security
+  splitHistory: [splitHistorySchema],
   // For derivatives only (OPTIONS, FUTURES)
   strikePrice: {
     type: Number,

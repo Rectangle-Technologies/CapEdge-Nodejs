@@ -35,6 +35,45 @@ const idValidation = [
     .withMessage('Invalid security ID')
 ];
 
+const securityIdValidation = [
+  param('securityId')
+    .isMongoId()
+    .withMessage('Invalid security ID')
+];
+
+const splitValidation = [
+  param('securityId')
+    .isMongoId()
+    .withMessage('Invalid security ID'),
+  body('splitDate')
+    .notEmpty()
+    .withMessage('Split date is required')
+    .isISO8601()
+    .withMessage('Invalid split date format'),
+  body('oldFaceValue')
+    .notEmpty()
+    .withMessage('Old face value is required')
+    .isFloat({ min: 0.01 })
+    .withMessage('Old face value must be a positive number'),
+  body('newFaceValue')
+    .notEmpty()
+    .withMessage('New face value is required')
+    .isFloat({ min: 0.01 })
+    .withMessage('New face value must be a positive number'),
+  body('transactions')
+    .isArray({ min: 1 })
+    .withMessage('Transactions array is required and must have at least one item'),
+  body('transactions.*.transactionId')
+    .isMongoId()
+    .withMessage('Invalid transaction ID'),
+  body('transactions.*.newQuantity')
+    .isInt({ min: 1 })
+    .withMessage('New quantity must be a positive integer'),
+  body('transactions.*.newPrice')
+    .isFloat({ min: 0 })
+    .withMessage('New price must be a non-negative number')
+];
+
 const queryValidation = [
   query('limit')
     .optional()
@@ -61,5 +100,9 @@ router.post('/create', securityValidation, handleValidationErrors, securityContr
 router.post('/bulk-create', securityController.bulkCreateSecurities);
 router.put('/update/:id', idValidation, securityValidation, handleValidationErrors, securityController.updateSecurity);
 router.delete('/delete/:id', idValidation, handleValidationErrors, securityController.deleteSecurity);
+
+// Stock split routes
+router.get('/split/:securityId/holdings', securityIdValidation, handleValidationErrors, securityController.getSecurityHoldingsForSplit);
+router.post('/split/:securityId', splitValidation, handleValidationErrors, securityController.processSplit);
 
 module.exports = router;

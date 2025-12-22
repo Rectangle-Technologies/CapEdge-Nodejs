@@ -238,10 +238,199 @@ const deleteSecurity = async (securityId) => {
   await Security.findByIdAndDelete(securityId);
 };
 
+/**
+ * Process stock split for a security
+ * Updates all transactions based on payload with new quantities and prices
+ * @param {String} securityId - Security ID
+ * @param {Object} splitData - { splitDate, oldFaceValue, newFaceValue, transactions }
+ * @param {Date} splitData.splitDate - Date of the split
+ * @param {Number} splitData.oldFaceValue - Old face value before split
+ * @param {Number} splitData.newFaceValue - New face value after split
+ * @param {Array} splitData.transactions - Array of transaction updates
+ * @param {String} splitData.transactions[].transactionId - Transaction ID to update
+ * @param {Number} splitData.transactions[].oldQuantity - Original quantity
+ * @param {Number} splitData.transactions[].newQuantity - New quantity after split
+ * @param {Number} splitData.transactions[].oldPrice - Original price
+ * @param {Number} splitData.transactions[].newPrice - New price after split
+ * @returns {Promise<Object>} - { security, updatedTransactions, updatedHoldings }
+ */
+const processSplit = async (securityId, splitData) => {
+  const { splitDate, oldFaceValue, newFaceValue, transactions } = splitData;
+
+  // Validate security exists
+  const security = await Security.findById(securityId);
+  if (!security) {
+    const error = new Error('Security not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  // Validate split data
+  if (!splitDate || !oldFaceValue || !newFaceValue) {
+    const error = new Error('Split date, old face value, and new face value are required');
+    error.statusCode = 422;
+    error.reasonCode = 'BAD_REQUEST';
+    throw error;
+  }
+
+  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    const error = new Error('Transactions array is required and cannot be empty');
+    error.statusCode = 422;
+    error.reasonCode = 'BAD_REQUEST';
+    throw error;
+  }
+
+  // Calculate split ratio (e.g., oldFaceValue=10, newFaceValue=2 => ratio is 1:5)
+  const splitMultiplier = oldFaceValue / newFaceValue;
+  const splitRatio = `1:${splitMultiplier}`;
+
+  // Track updates
+  let transactionsUpdated = 0;
+  let holdingsUpdated = 0;
+  const updatedTransactionIds = [];
+  const failedUpdates = [];
+
+  // Process each transaction update
+  for (const txnUpdate of transactions) {
+    const { transactionId, newQuantity, newPrice } = txnUpdate;
+
+    if (!transactionId || newQuantity === undefined || newPrice === undefined) {
+      failedUpdates.push({
+        transactionId,
+        reason: 'Missing required fields (transactionId, newQuantity, newPrice)'
+      });
+      continue;
+    }
+
+    try {
+      // Update the transaction
+      const transaction = await Transaction.findOneAndUpdate(
+        { _id: transactionId, securityId },
+        { 
+          quantity: newQuantity,
+          price: newPrice
+        },
+        { new: true }
+      );
+
+      if (transaction) {
+        transactionsUpdated++;
+        updatedTransactionIds.push(transactionId);
+
+        // Update corresponding holding if exists
+        const holding = await Holdings.findOneAndUpdate(
+          { transactionId, securityId },
+          {
+            quantity: newQuantity,
+            price: newPrice
+          },
+          { new: true }
+        );
+
+        if (holding) {
+          holdingsUpdated++;
+        }
+      } else {
+        failedUpdates.push({
+          transactionId,
+          reason: 'Transaction not found or does not belong to this security'
+        });
+      }
+    } catch (err) {
+      failedUpdates.push({
+        transactionId,
+        reason: err.message
+      });
+    }
+  }
+
+  // Add split history record to the security
+  const splitHistoryRecord = {
+    splitDate: new Date(splitDate),
+    oldFaceValue,
+    newFaceValue,
+    splitRatio,
+    transactionsUpdated,
+    holdingsUpdated
+  };
+
+  security.splitHistory.push(splitHistoryRecord);
+  await security.save();
+
+  return {
+    security,
+    summary: {
+      transactionsUpdated,
+      holdingsUpdated,
+      totalTransactionsProvided: transactions.length,
+      failedUpdates: failedUpdates.length
+    },
+    failedUpdates: failedUpdates.length > 0 ? failedUpdates : undefined,
+    splitHistory: splitHistoryRecord
+  };
+};
+
+/**
+ * Get all holdings for a security across all user accounts and demat accounts
+ * @param {String} securityId - Security ID
+ * @returns {Promise<Object>} - Holdings grouped by userAccount and dematAccount
+ */
+const getSecurityHoldingsForSplit = async (securityId) => {
+  // Validate security exists
+  const security = await Security.findById(securityId);
+  if (!security) {
+    const error = new Error('Security not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  // Get all holdings for this security with populated references
+  const holdings = await Holdings.find({ securityId })
+    .populate('securityId')
+    .populate({
+      path: 'dematAccountId',
+      populate: [
+        { path: 'brokerId' },
+        { path: 'userAccountId' }
+      ]
+    })
+    .populate('transactionId')
+    .populate('financialYearId', 'title')
+    .lean();
+
+  // Get all transactions for this security
+  const transactions = await Transaction.find({ securityId })
+    .populate({
+      path: 'dematAccountId',
+      populate: [
+        { path: 'brokerId' },
+        { path: 'userAccountId' }
+      ]
+    })
+    .populate('financialYearId', 'title')
+    .sort({ date: 1 })
+    .lean();
+
+  return {
+    security,
+    holdings,
+    transactions,
+    summary: {
+      totalHoldings: holdings.length,
+      totalTransactions: transactions.length,
+      totalHoldingQuantity: holdings.reduce((sum, h) => sum + h.quantity, 0)
+    }
+  };
+};
+
 module.exports = {
   getSecurities,
   createSecurity,
   bulkCreateSecurities,
   updateSecurity,
-  deleteSecurity
+  deleteSecurity,
+  processSplit,
+  getSecurityHoldingsForSplit
 };
