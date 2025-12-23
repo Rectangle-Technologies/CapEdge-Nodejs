@@ -2,6 +2,7 @@ const Security = require('../models/Security');
 const Transaction = require('../models/Transaction');
 const Holdings = require('../models/Holdings');
 const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require('../constants');
+const mongoose = require('mongoose');
 
 /**
  * Security Service
@@ -15,10 +16,10 @@ const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require
  */
 const getSecurities = async (filters = {}) => {
   const { name, search, type, limit, pageNo = 1 } = filters;
-  
+
   // Calculate offset from pageNo and limit
   const offset = (pageNo - 1) * limit;
-  
+
   // Build query
   const query = {};
   if (name) {
@@ -182,10 +183,10 @@ const updateSecurity = async (securityId, updateData) => {
   }
 
   // Check for duplicate security name
-  const existingSecurity = await Security.findOne({ 
+  const existingSecurity = await Security.findOne({
     _id: { $ne: securityId },
-    name: name.trim(), 
-    type 
+    name: name.trim(),
+    type
   });
   if (existingSecurity) {
     const error = new Error('Another security with this name and type already exists');
@@ -200,7 +201,7 @@ const updateSecurity = async (securityId, updateData) => {
   security.expiry = DERIVATIVE_TYPES.includes(type) ? expiry : null;
 
   await security.save();
-  
+
   return security;
 };
 
@@ -266,21 +267,6 @@ const processSplit = async (securityId, splitData) => {
     throw error;
   }
 
-  // Validate split data
-  if (!splitDate || !oldFaceValue || !newFaceValue) {
-    const error = new Error('Split date, old face value, and new face value are required');
-    error.statusCode = 422;
-    error.reasonCode = 'BAD_REQUEST';
-    throw error;
-  }
-
-  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
-    const error = new Error('Transactions array is required and cannot be empty');
-    error.statusCode = 422;
-    error.reasonCode = 'BAD_REQUEST';
-    throw error;
-  }
-
   // Calculate split ratio (e.g., oldFaceValue=10, newFaceValue=2 => ratio is 1:5)
   const splitMultiplier = oldFaceValue / newFaceValue;
   const splitRatio = `1:${splitMultiplier}`;
@@ -289,29 +275,23 @@ const processSplit = async (securityId, splitData) => {
   let transactionsUpdated = 0;
   let holdingsUpdated = 0;
   const updatedTransactionIds = [];
-  const failedUpdates = [];
 
   // Process each transaction update
-  for (const txnUpdate of transactions) {
-    const { transactionId, newQuantity, newPrice } = txnUpdate;
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
 
-    if (!transactionId || newQuantity === undefined || newPrice === undefined) {
-      failedUpdates.push({
-        transactionId,
-        reason: 'Missing required fields (transactionId, newQuantity, newPrice)'
-      });
-      continue;
-    }
+    for (const txnUpdate of transactions) {
+      const { transactionId, newQuantity, newPrice } = txnUpdate;
 
-    try {
       // Update the transaction
       const transaction = await Transaction.findOneAndUpdate(
         { _id: transactionId, securityId },
-        { 
+        {
           quantity: newQuantity,
           price: newPrice
         },
-        { new: true }
+        { new: true, session }
       );
 
       if (transaction) {
@@ -325,50 +305,56 @@ const processSplit = async (securityId, splitData) => {
             quantity: newQuantity,
             price: newPrice
           },
-          { new: true }
+          { new: true, session }
         );
 
         if (holding) {
           holdingsUpdated++;
+        } else {
+          throw new Error('Holding not found for the transaction');
         }
       } else {
-        failedUpdates.push({
-          transactionId,
-          reason: 'Transaction not found or does not belong to this security'
-        });
+        throw new Error('Transaction not found or does not belong to this security');
       }
-    } catch (err) {
-      failedUpdates.push({
-        transactionId,
-        reason: err.message
-      });
     }
-  }
 
-  // Add split history record to the security
-  const splitHistoryRecord = {
-    splitDate: new Date(splitDate),
-    oldFaceValue,
-    newFaceValue,
-    splitRatio,
-    transactionsUpdated,
-    holdingsUpdated
-  };
-
-  security.splitHistory.push(splitHistoryRecord);
-  await security.save();
-
-  return {
-    security,
-    summary: {
+    // Add split history record to the security
+    const splitHistoryRecord = {
+      splitDate: new Date(splitDate),
+      oldFaceValue,
+      newFaceValue,
+      splitRatio,
       transactionsUpdated,
-      holdingsUpdated,
-      totalTransactionsProvided: transactions.length,
-      failedUpdates: failedUpdates.length
-    },
-    failedUpdates: failedUpdates.length > 0 ? failedUpdates : undefined,
-    splitHistory: splitHistoryRecord
-  };
+      holdingsUpdated
+    };
+
+    security.splitHistory.push(splitHistoryRecord);
+    await security.save({ session });
+
+    await session.commitTransaction(); 
+
+    return {
+      security,
+      summary: {
+        transactionsUpdated,
+        holdingsUpdated,
+        totalTransactionsProvided: transactions.length,
+      },
+      splitHistory: splitHistoryRecord
+    };
+  } catch (err) {
+    console.error(`Error in transaction attempt`, err);
+
+    // Abort the transaction if it's still active
+    if (session.inTransaction()) {
+      console.error('Aborting transaction due to error.');
+      await session.abortTransaction();
+    }
+
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };
 
 /**

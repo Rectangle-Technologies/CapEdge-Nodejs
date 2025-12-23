@@ -88,11 +88,7 @@ const processSplit = async (req, res, next) => {
     const { securityId } = req.params;
     const result = await securityService.processSplit(securityId, req.body);
     
-    const message = result.summary.failedUpdates > 0
-      ? `Stock split processed with ${result.summary.failedUpdates} failed updates`
-      : 'Stock split processed successfully';
-    
-    return ApiResponse.success(res, result, message);
+    return ApiResponse.success(res, result, 'Stock split successfully');
   } catch (error) {
     next(error);
   }

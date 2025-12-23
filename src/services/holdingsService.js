@@ -259,6 +259,7 @@ const getHoldingsForSplit = async (securityId) => {
       title: `${userName} - ${brokerName}`,
       entries: dematHoldings.map(holding => ({
         buyDate: holding.buyDate,
+        price: holding.price,
         quantity: holding.quantity,
         transactionId: holding.transactionId
       }))
