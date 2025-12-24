@@ -239,119 +239,97 @@ const deleteSecurity = async (securityId) => {
   await Security.findByIdAndDelete(securityId);
 };
 
-/**
- * Process stock split for a security
- * Updates all transactions based on payload with new quantities and prices
- * @param {String} securityId - Security ID
- * @param {Object} splitData - { splitDate, oldFaceValue, newFaceValue, transactions }
- * @param {Date} splitData.splitDate - Date of the split
- * @param {Number} splitData.oldFaceValue - Old face value before split
- * @param {Number} splitData.newFaceValue - New face value after split
- * @param {Array} splitData.transactions - Array of transaction updates
- * @param {String} splitData.transactions[].transactionId - Transaction ID to update
- * @param {Number} splitData.transactions[].oldQuantity - Original quantity
- * @param {Number} splitData.transactions[].newQuantity - New quantity after split
- * @param {Number} splitData.transactions[].oldPrice - Original price
- * @param {Number} splitData.transactions[].newPrice - New price after split
- * @returns {Promise<Object>} - { security, updatedTransactions, updatedHoldings }
- */
-const processSplit = async (securityId, splitData) => {
-  const { splitDate, oldFaceValue, newFaceValue, transactions } = splitData;
-
-  // Validate security exists
-  const security = await Security.findById(securityId);
-  if (!security) {
-    const error = new Error('Security not found');
-    error.statusCode = 404;
-    error.reasonCode = 'NOT_FOUND';
-    throw error;
-  }
-
-  // Calculate split ratio (e.g., oldFaceValue=10, newFaceValue=2 => ratio is 1:5)
-  const splitMultiplier = oldFaceValue / newFaceValue;
-  const splitRatio = `1:${splitMultiplier}`;
-
-  // Track updates
-  let transactionsUpdated = 0;
-  let holdingsUpdated = 0;
-  const updatedTransactionIds = [];
-
-  // Process each transaction update
+const processSplit = async (payload) => {
   const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    session.startTransaction();
+    const { securityId, splitDate, splitRatio, transactions } = payload;
 
-    for (const txnUpdate of transactions) {
-      const { transactionId, newQuantity, newPrice } = txnUpdate;
+    // Fetch security
+    const security = await Security.findById(securityId).session(session);
+    if (!security) {
+      const error = new Error('Security not found');
+      error.statusCode = 404;
+      throw error;
+    }
 
-      // Update the transaction
-      const transaction = await Transaction.findOneAndUpdate(
-        { _id: transactionId, securityId },
-        {
-          quantity: newQuantity,
-          price: newPrice
-        },
-        { new: true, session }
-      );
+    // Update each transaction and holdings
+    for (let i = 0; i < transactions.length; i++) {
+      const txData = transactions[i];
 
-      if (transaction) {
-        transactionsUpdated++;
-        updatedTransactionIds.push(transactionId);
+      const transaction = Transaction.findById(txData.transactionId).session(session);
+      const holding = Holdings.findById(txData.holdingId).session(session);
 
-        // Update corresponding holding if exists
-        const holding = await Holdings.findOneAndUpdate(
-          { transactionId, securityId },
-          {
-            quantity: newQuantity,
-            price: newPrice
-          },
-          { new: true, session }
-        );
+      const [transactionResult, holdingResult] = await Promise.all([transaction, holding]);
 
-        if (holding) {
-          holdingsUpdated++;
-        } else {
-          throw new Error('Holding not found for the transaction');
-        }
+      if (!holdingResult) {
+        const error = new Error(`Holding not found: ${txData.holdingId}`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (!transactionResult) {
+        const error = new Error(`Transaction not found: ${txData.transactionId}`);
+        error.statusCode = 404;
+        throw error;
+      }
+
+      // Check if transaction qty and holding qty match before split
+      if (transactionResult.quantity > txData.quantityBeforeSplit) {
+        // Split the transaction into two
+        const soldQty = transactionResult.quantity - txData.quantityBeforeSplit;
+        transactionResult.quantity = soldQty;
+
+        // Create new transaction for split shares
+        var newTrnDetails = {...transactionResult.toObject()};
+        newTrnDetails.quantity = txData.quantityAfterSplit;
+        newTrnDetails.price = txData.priceAfterSplit;
+        delete newTrnDetails._id; delete newTrnDetails.id; delete newTrnDetails.createdAt; delete newTrnDetails.updatedAt;
+        var newTransaction = new Transaction(newTrnDetails);
+        
+        // Update holding
+        holdingResult.quantity = txData.quantityAfterSplit;
+        holdingResult.price = txData.priceAfterSplit;
+        
+        // Save all changes
+        var oldTrnSave = transactionResult.save({ session });
+        var newTrnSave = newTransaction.save({ session });
+        var [_, newTrxn, _] = await Promise.all([oldTrnSave, newTrnSave]);
+
+        // Link new transaction to holding
+        txData.transactionId = newTrxn._id;
+        holdingResult.transactionId = newTrxn._id;
+        var holdingResultSave = holdingResult.save({ session });
+      } else if (holdingResult.quantity > txData.quantityBeforeSplit) {
+        const error = new Error(`Holding quantity less than quantity before split for holding: ${txData.holdingId}`);
+        error.statusCode = 400;
+        throw error;
       } else {
-        throw new Error('Transaction not found or does not belong to this security');
+        // Update transaction quantity and price
+        transactionResult.quantity = txData.quantityAfterSplit;
+        transactionResult.price = txData.priceAfterSplit;
+        holdingResult.quantity = txData.quantityAfterSplit;
+        holdingResult.price = txData.priceAfterSplit;
+
+        var trnResult = transactionResult.save({ session });
+        var holdingResultSave = holdingResult.save({ session });
+        await Promise.all([trnResult, holdingResultSave]);
       }
     }
 
-    // Add split history record to the security
-    const splitHistoryRecord = {
-      splitDate: new Date(splitDate),
-      oldFaceValue,
-      newFaceValue,
+    // Add split record to security
+    security.splitHistory.push({
+      splitDate,
       splitRatio,
-      transactionsUpdated,
-      holdingsUpdated
-    };
+      transactions
+    });
 
-    security.splitHistory.push(splitHistoryRecord);
     await security.save({ session });
 
-    await session.commitTransaction(); 
-
-    return {
-      security,
-      summary: {
-        transactionsUpdated,
-        holdingsUpdated,
-        totalTransactionsProvided: transactions.length,
-      },
-      splitHistory: splitHistoryRecord
-    };
-  } catch (err) {
-    console.error(`Error in transaction attempt`, err);
-
-    // Abort the transaction if it's still active
-    if (session.inTransaction()) {
-      console.error('Aborting transaction due to error.');
-      await session.abortTransaction();
-    }
-
-    throw err;
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
   } finally {
     session.endSession();
   }

@@ -261,7 +261,8 @@ const getHoldingsForSplit = async (securityId) => {
         buyDate: holding.buyDate,
         price: holding.price,
         quantity: holding.quantity,
-        transactionId: holding.transactionId
+        transactionId: holding.transactionId,
+        holdingId: holding._id
       }))
     };
   });

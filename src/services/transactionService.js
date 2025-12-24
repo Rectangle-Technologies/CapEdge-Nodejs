@@ -95,6 +95,8 @@ const validateTransaction = async (transactionData, session) => {
         Security.findById(transactionData.securityId).session(session)
     ]);
 
+    // TODO: TransactionDate should not be less than the oldest split record date for the security
+
     if (!dematAccount) throwNotFoundError('Demat account not found');
     if (!security) throwNotFoundError('Security not found');
 };

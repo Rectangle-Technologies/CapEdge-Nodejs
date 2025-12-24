@@ -79,20 +79,15 @@ const deleteSecurity = async (req, res, next) => {
   }
 };
 
-/**
- * Process stock split for a security
- * Updates all transactions based on payload with new quantities and prices
- */
 const processSplit = async (req, res, next) => {
   try {
-    const { securityId } = req.params;
-    const result = await securityService.processSplit(securityId, req.body);
+    await securityService.processSplit(req.body);
     
-    return ApiResponse.success(res, result, 'Stock split successfully');
+    return ApiResponse.success(res, null, 'Security split processed successfully');
   } catch (error) {
     next(error);
   }
-};
+}
 
 module.exports = {
   getSecurities,

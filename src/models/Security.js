@@ -7,26 +7,33 @@ const splitHistorySchema = new mongoose.Schema({
     type: Date,
     required: true
   },
-  oldFaceValue: {
-    type: Number,
-    required: true
-  },
-  newFaceValue: {
-    type: Number,
-    required: true
-  },
   splitRatio: {
     type: String, // e.g., "1:2" means 1 old share becomes 2 new shares
     required: true
   },
-  transactionsUpdated: {
-    type: Number,
-    default: 0
-  },
-  holdingsUpdated: {
-    type: Number,
-    default: 0
-  },
+  transactions: [{
+    transactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Transaction',
+      required: true
+    },
+    quantityBeforeSplit: {
+      type: Number,
+      required: true
+    },
+    quantityAfterSplit: {
+      type: Number,
+      required: true
+    },
+    priceBeforeSplit: {
+      type: Number,
+      required: true
+    },
+    priceAfterSplit: {
+      type: Number,
+      required: true
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -48,9 +55,7 @@ const securitySchema = new mongoose.Schema({
       message: 'Security type must be one of: ' + SECURITY_TYPES_ARRAY.join(', ')
     }
   },
-  // Split history for the security
   splitHistory: [splitHistorySchema],
-  // For derivatives only (OPTIONS, FUTURES)
   strikePrice: {
     type: Number,
     min: [0, 'Strike price must be positive'],

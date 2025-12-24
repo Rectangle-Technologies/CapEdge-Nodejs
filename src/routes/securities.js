@@ -42,36 +42,9 @@ const securityIdValidation = [
 ];
 
 const splitValidation = [
-  param('securityId')
-    .isMongoId()
-    .withMessage('Invalid security ID'),
-  body('splitDate')
+  body('securityId')
     .notEmpty()
-    .withMessage('Split date is required')
-    .isISO8601()
-    .withMessage('Invalid split date format'),
-  body('oldFaceValue')
-    .notEmpty()
-    .withMessage('Old face value is required')
-    .isFloat({ min: 0.01 })
-    .withMessage('Old face value must be a positive number'),
-  body('newFaceValue')
-    .notEmpty()
-    .withMessage('New face value is required')
-    .isFloat({ min: 0.01 })
-    .withMessage('New face value must be a positive number'),
-  body('transactions')
-    .isArray({ min: 1 })
-    .withMessage('Transactions array is required and must have at least one item'),
-  body('transactions.*.transactionId')
-    .isMongoId()
-    .withMessage('Invalid transaction ID'),
-  body('transactions.*.newQuantity')
-    .isInt({ min: 1 })
-    .withMessage('New quantity must be a positive integer'),
-  body('transactions.*.newPrice')
-    .isFloat({ min: 0 })
-    .withMessage('New price must be a non-negative number')
+    .withMessage('Security ID is required')
 ];
 
 const queryValidation = [
@@ -102,6 +75,6 @@ router.put('/update/:id', idValidation, securityValidation, handleValidationErro
 router.delete('/delete/:id', idValidation, handleValidationErrors, securityController.deleteSecurity);
 
 // Stock split routes
-router.post('/split/:securityId', splitValidation, handleValidationErrors, securityController.processSplit);
+router.post('/split', splitValidation, handleValidationErrors, securityController.processSplit);
 
 module.exports = router;
