@@ -102,7 +102,6 @@ router.put('/update/:id', idValidation, securityValidation, handleValidationErro
 router.delete('/delete/:id', idValidation, handleValidationErrors, securityController.deleteSecurity);
 
 // Stock split routes
-router.get('/split/:securityId/holdings', securityIdValidation, handleValidationErrors, securityController.getSecurityHoldingsForSplit);
 router.post('/split/:securityId', splitValidation, handleValidationErrors, securityController.processSplit);
 
 module.exports = router;

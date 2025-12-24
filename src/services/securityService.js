@@ -357,66 +357,11 @@ const processSplit = async (securityId, splitData) => {
   }
 };
 
-/**
- * Get all holdings for a security across all user accounts and demat accounts
- * @param {String} securityId - Security ID
- * @returns {Promise<Object>} - Holdings grouped by userAccount and dematAccount
- */
-const getSecurityHoldingsForSplit = async (securityId) => {
-  // Validate security exists
-  const security = await Security.findById(securityId);
-  if (!security) {
-    const error = new Error('Security not found');
-    error.statusCode = 404;
-    error.reasonCode = 'NOT_FOUND';
-    throw error;
-  }
-
-  // Get all holdings for this security with populated references
-  const holdings = await Holdings.find({ securityId })
-    .populate('securityId')
-    .populate({
-      path: 'dematAccountId',
-      populate: [
-        { path: 'brokerId' },
-        { path: 'userAccountId' }
-      ]
-    })
-    .populate('transactionId')
-    .populate('financialYearId', 'title')
-    .lean();
-
-  // Get all transactions for this security
-  const transactions = await Transaction.find({ securityId })
-    .populate({
-      path: 'dematAccountId',
-      populate: [
-        { path: 'brokerId' },
-        { path: 'userAccountId' }
-      ]
-    })
-    .populate('financialYearId', 'title')
-    .sort({ date: 1 })
-    .lean();
-
-  return {
-    security,
-    holdings,
-    transactions,
-    summary: {
-      totalHoldings: holdings.length,
-      totalTransactions: transactions.length,
-      totalHoldingQuantity: holdings.reduce((sum, h) => sum + h.quantity, 0)
-    }
-  };
-};
-
 module.exports = {
   getSecurities,
   createSecurity,
   bulkCreateSecurities,
   updateSecurity,
   deleteSecurity,
-  processSplit,
-  getSecurityHoldingsForSplit
+  processSplit
 };

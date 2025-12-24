@@ -94,27 +94,11 @@ const processSplit = async (req, res, next) => {
   }
 };
 
-/**
- * Get all holdings for a security across all user accounts and demat accounts
- * Used to display holdings before processing a split
- */
-const getSecurityHoldingsForSplit = async (req, res, next) => {
-  try {
-    const { securityId } = req.params;
-    const result = await securityService.getSecurityHoldingsForSplit(securityId);
-    
-    return ApiResponse.success(res, result, 'Security holdings retrieved successfully');
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   getSecurities,
   createSecurity,
   bulkCreateSecurities,
   updateSecurity,
   deleteSecurity,
-  processSplit,
-  getSecurityHoldingsForSplit
+  processSplit
 };
