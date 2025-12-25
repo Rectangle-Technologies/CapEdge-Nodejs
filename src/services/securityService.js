@@ -44,6 +44,13 @@ const getSecurities = async (filters = {}) => {
     .skip(parseInt(offset))
     .lean();
 
+  // Sort splitHistory by splitDate for each security
+  securities.forEach(security => {
+    if (security.splitHistory && security.splitHistory.length > 0) {
+      security.splitHistory.sort((a, b) => new Date(a.splitDate) - new Date(b.splitDate));
+    }
+  });
+
   return {
     securities,
     securityTypes: SECURITY_TYPES_ARRAY,

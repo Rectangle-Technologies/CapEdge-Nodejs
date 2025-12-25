@@ -95,7 +95,18 @@ const validateTransaction = async (transactionData, session) => {
         Security.findById(transactionData.securityId).session(session)
     ]);
 
-    // TODO: TransactionDate should not be less than the oldest split record date for the security
+    // Check if there is a split entry after the transaction date
+    console.log('Security Split History:', security.splitHistory);
+    console.log('Transaction Date:', transactionData);
+    const splitEntry = security.splitHistory.find(split => new Date(split.splitDate) > new Date(transactionData.date));
+    if (splitEntry) {
+        const splitDate = new Date(splitEntry.splitDate);
+        const formattedDate = `${splitDate.getDate().toString().padStart(2, '0')}/${(splitDate.getMonth() + 1).toString().padStart(2, '0')}/${splitDate.getFullYear()}`;
+        const error = new Error(`Cannot add transaction for ${security.name} as it was split on ${formattedDate}`);
+        error.statusCode = 400;
+        error.reasonCode = 'BAD_REQUEST';
+        throw error;
+    }
 
     if (!dematAccount) throwNotFoundError('Demat account not found');
     if (!security) throwNotFoundError('Security not found');

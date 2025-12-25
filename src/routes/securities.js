@@ -35,16 +35,67 @@ const idValidation = [
     .withMessage('Invalid security ID')
 ];
 
-const securityIdValidation = [
-  param('securityId')
-    .isMongoId()
-    .withMessage('Invalid security ID')
-];
-
 const splitValidation = [
   body('securityId')
     .notEmpty()
     .withMessage('Security ID is required')
+    .isMongoId()
+    .withMessage('Invalid security ID format'),
+  body('splitDate')
+    .notEmpty()
+    .withMessage('Split date is required')
+    .isISO8601()
+    .withMessage('Split date must be a valid ISO 8601 date format')
+    .custom((value) => {
+      const splitDate = new Date(value);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of today
+      if (splitDate > today) {
+        throw new Error('Split date cannot be a future date');
+      }
+      return true;
+    }),
+  body('splitRatio')
+    .notEmpty()
+    .withMessage('Split ratio is required')
+    .isString()
+    .withMessage('Split ratio must be a string')
+    .trim(),
+  body('transactions')
+    .notEmpty()
+    .withMessage('Transactions array is required')
+    .isArray({ min: 1 })
+    .withMessage('Transactions must be a non-empty array'),
+  body('transactions.*.transactionId')
+    .notEmpty()
+    .withMessage('Transaction ID is required for each transaction')
+    .isMongoId()
+    .withMessage('Invalid transaction ID format'),
+  body('transactions.*.holdingId')
+    .notEmpty()
+    .withMessage('Holding ID is required for each transaction')
+    .isMongoId()
+    .withMessage('Invalid holding ID format'),
+  body('transactions.*.quantityBeforeSplit')
+    .notEmpty()
+    .withMessage('Quantity before split is required for each transaction')
+    .isFloat({ min: 0 })
+    .withMessage('Quantity before split must be a non-negative number'),
+  body('transactions.*.quantityAfterSplit')
+    .notEmpty()
+    .withMessage('Quantity after split is required for each transaction')
+    .isFloat({ min: 0 })
+    .withMessage('Quantity after split must be a non-negative number'),
+  body('transactions.*.priceBeforeSplit')
+    .notEmpty()
+    .withMessage('Price before split is required for each transaction')
+    .isFloat({ min: 0 })
+    .withMessage('Price before split must be a non-negative number'),
+  body('transactions.*.priceAfterSplit')
+    .notEmpty()
+    .withMessage('Price after split is required for each transaction')
+    .isFloat({ min: 0 })
+    .withMessage('Price after split must be a non-negative number')
 ];
 
 const queryValidation = [
