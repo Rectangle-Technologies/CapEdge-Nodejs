@@ -26,8 +26,8 @@ const getHoldings = async (req, res, next) => {
 
 const getHoldingsForSplit = async (req, res, next) => {
   try {
-    const { securityId } = req.params;
-    const result = await holdingsService.getHoldingsForSplit(securityId);
+    const { securityId, splitDate } = req.params;
+    const result = await holdingsService.getHoldingsForSplit(securityId, splitDate);
     
     return ApiResponse.success(res, result, 'Holdings for split retrieved successfully');
   } catch (error) {

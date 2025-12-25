@@ -260,6 +260,16 @@ const processSplit = async (payload) => {
       throw error;
     }
 
+    // Check that splitDate is after the latest transaction for this security
+    const latestTransaction = await Transaction.findOne({ securityId })
+      .sort({ date: -1 })
+      .session(session);
+    if (latestTransaction && new Date(splitDate) < latestTransaction.date) {
+      const error = new Error('Split date cannot be before the latest transaction date for this security');
+      error.statusCode = 400;
+      throw error;
+    }
+
     // Update each transaction and holdings
     for (let i = 0; i < transactions.length; i++) {
       const txData = transactions[i];

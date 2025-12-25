@@ -218,14 +218,17 @@ const getHoldings = async (filters = {}) => {
   };
 };
 
-const getHoldingsForSplit = async (securityId) => {
+const getHoldingsForSplit = async (securityId, splitDate) => {
   // Check if security exists
   const security = await Security.findById(securityId);
   if (!security) {
     throw new Error('Security not found');
   }
 
-  const query = { securityId };
+  const query = { 
+    securityId,
+    buyDate: { $lt: new Date(splitDate) }
+  };
 
   const holdings = await Holdings.find(query)
     .populate('securityId')
