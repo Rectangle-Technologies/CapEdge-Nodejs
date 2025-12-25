@@ -115,7 +115,7 @@ const getPnLRecords = async (data) => {
 
           const resultType = txn.price >= holding.price ? 'gain' : 'loss';
           const gainType = getGainType(holding.buyDate, txn.date, 'EQUITY');
-          const taxableAmount = ((txn.price - holding.price) * matchedQuantity) - txn.transactionCost - holding.transactionCost;
+          const taxableAmount = ((txn.price - holding.price) * matchedQuantity) - (txn.transactionCost || 0) - (holding.transactionCost || 0);
           let calculatedTax = 0;
           if (gainType === 'LTCG') {
             calculatedTax = taxableAmount * financialYear.ltcgRate;
