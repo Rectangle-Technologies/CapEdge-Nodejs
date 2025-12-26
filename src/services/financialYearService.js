@@ -4,7 +4,9 @@ const DematAccount = require('../models/DematAccount');
 
 const getFinancialYears = async (filters) => {
 	const { date } = filters;
-	const query = {};
+	const query = {
+		startDate: { $gte: new Date('2025-04-01') }
+	};
 
 	if (date) {
 		const filterDate = new Date(date);
