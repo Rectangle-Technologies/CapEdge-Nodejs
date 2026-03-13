@@ -18,6 +18,22 @@ const login = async (req, res, next) => {
 };
 
 /**
+ * Register a new user
+ * @route POST /auth/register
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const register = async (req, res, next) => {
+  try {
+    const result = await authService.register(req.body);
+
+    return ApiResponse.success(res, result, 'Registration successful');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Validate JWT token
  * @route POST /auth/validate-token
  * @param {Object} req - Express request object
@@ -33,5 +49,6 @@ const validateToken = async (req, res, next) => {
 
 module.exports = {
   login,
-  validateToken
+  validateToken,
+  register
 };

@@ -36,5 +36,6 @@ const loginValidation = [
 // Routes
 router.post('/login', loginLimiter, loginValidation, handleValidationErrors, authController.login);
 router.post('/validate-token', authMiddleware, authController.validateToken);
+router.post('/register', authController.register);
 
 module.exports = router;

@@ -118,8 +118,8 @@ const createSecurity = async (securityData) => {
     expiry: DERIVATIVE_TYPES.includes(type) ? expiry : null
   });
 
-  await security.save();
-  return security;
+  const createdSecurity = await security.save();
+  return createdSecurity;
 };
 
 /**
