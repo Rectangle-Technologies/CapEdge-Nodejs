@@ -49,11 +49,11 @@ const transactionValidation = [
       
       // Price is required only for Delivery type
       if (deliveryType === 'Delivery') {
-        if (!value) {
+        if (value === undefined || value === null || value === '') {
           throw new Error('Price is required for Delivery type transactions');
         }
-        if (typeof value !== 'number' || value <= 0) {
-          throw new Error('Price must be greater than 0');
+        if (typeof value !== 'number' || value < 0) {
+          throw new Error('Price must be 0 or greater');
         }
       }
       return true;
