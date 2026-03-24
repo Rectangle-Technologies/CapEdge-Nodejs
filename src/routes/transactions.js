@@ -39,8 +39,8 @@ const transactionValidation = [
   body('*.quantity')
     .notEmpty()
     .withMessage('Quantity is required')
-    .isInt({ min: 1 })
-    .withMessage('Quantity must be a positive integer'),
+    .isFloat({ min: 0.000001 })
+    .withMessage('Quantity must be a positive number'),
   body('*.price')
     .custom((value, { req, path }) => {
       // Extract the index from the path (e.g., "[0].price" -> 0)

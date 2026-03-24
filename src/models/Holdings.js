@@ -9,10 +9,6 @@ const holdingsSchema = new mongoose.Schema({
   quantity: {
     type: Number,
     required: [true, 'Quantity is required'],
-    validate: {
-      validator: Number.isInteger,
-      message: 'Quantity must be an integer'
-    }
   },
   price: {
     type: Number,
