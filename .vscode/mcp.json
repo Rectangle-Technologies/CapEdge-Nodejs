@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "ecip-local": {
+      "url": "http://127.0.0.1:53393/sse"
+    }
+  }
+}
