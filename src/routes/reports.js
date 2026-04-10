@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, query } = require('express-validator');
 const reportController = require('../controllers/reportController');
-const { handleValidationErrors } = require('../middleware/validation');
+const { handleValidationErrors, validateFinancialYearAccess } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -27,10 +27,10 @@ const ledgerQueryValidation = [
 ];
 
 // P&L Report Routes
-router.post('/pnl/export', pnlValidation, handleValidationErrors, reportController.exportPnLReport);
+router.post('/pnl/export', pnlValidation, handleValidationErrors, validateFinancialYearAccess, reportController.exportPnLReport);
 
 // All holdings Report Routes
-router.get('/holdings/export', reportController.exportHoldingsReport);
+router.get('/holdings/export', validateFinancialYearAccess, reportController.exportHoldingsReport);
 
 // Ledger
 router.get('/ledger/export/:dematAccountId', ledgerQueryValidation, handleValidationErrors, reportController.exportLedgerReport);
