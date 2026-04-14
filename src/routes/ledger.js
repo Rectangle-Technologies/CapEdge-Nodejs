@@ -1,5 +1,5 @@
 const express = require('express');
-const { query, body } = require('express-validator');
+const { query, body, param } = require('express-validator');
 const ledgerController = require('../controllers/ledgerController');
 const { handleValidationErrors } = require('../middleware/validation');
 
@@ -65,6 +65,7 @@ const addLedgerEntryValidation = [
 // Routes
 router.get('/get/:dematAccountId', queryValidation, handleValidationErrors, ledgerController.getLedgerEntries);
 router.post('/add', addLedgerEntryValidation, handleValidationErrors, ledgerController.addLedgerEntry);
+router.delete('/:id', [param('id').isMongoId().withMessage('Invalid ledger entry ID')], handleValidationErrors, ledgerController.deleteLedgerEntry);
 router.get('/export', queryValidation, handleValidationErrors, ledgerController.exportLedger);
 router.post('/fix', ledgerController.fixLedgerEntries);
 

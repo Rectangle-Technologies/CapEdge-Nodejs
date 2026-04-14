@@ -239,8 +239,49 @@ const fixLedgerEntries = async (data) => {
   }
 }
 
+const deleteLedgerEntry = async (entryId) => {
+  const entry = await LedgerEntry.findById(entryId);
+  if (!entry) {
+    const error = new Error('Ledger entry not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  if (entry.tradeTransactionId) {
+    const error = new Error('Cannot delete a trade-linked ledger entry. Delete the associated transaction instead.');
+    error.statusCode = 400;
+    error.reasonCode = 'TRADE_LINKED';
+    throw error;
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction({
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+      readPreference: 'primary'
+    });
+
+    await LedgerEntry.deleteOne({ _id: entryId }).session(session);
+    await updateRecords(entry.date, entry.dematAccountId, session);
+
+    const updatedDematAccount = await DematAccount.findById(entry.dematAccountId).session(session);
+    const latestBalance = updatedDematAccount ? updatedDematAccount.balance : null;
+
+    await session.commitTransaction();
+    return { latestBalance };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   getLedgerEntries,
   addLedgerEntry,
+  deleteLedgerEntry,
   fixLedgerEntries
 };

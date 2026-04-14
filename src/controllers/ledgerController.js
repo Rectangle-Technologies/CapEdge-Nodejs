@@ -68,6 +68,15 @@ const exportLedger = async (req, res, next) => {
   }
 };
 
+const deleteLedgerEntry = async (req, res, next) => {
+  try {
+    const result = await ledgerService.deleteLedgerEntry(req.params.id);
+    return ApiResponse.success(res, result, 'Ledger entry deleted successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 const fixLedgerEntries = async (req, res, next) => {
   try {
     const result = await ledgerService.fixLedgerEntries(req.body);
@@ -80,6 +89,7 @@ const fixLedgerEntries = async (req, res, next) => {
 module.exports = {
   getLedgerEntries,
   addLedgerEntry,
+  deleteLedgerEntry,
   exportLedger,
   fixLedgerEntries
 };
