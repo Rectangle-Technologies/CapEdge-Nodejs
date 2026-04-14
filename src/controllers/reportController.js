@@ -1,6 +1,29 @@
 const reportService = require('../services/reportService');
 const ApiResponse = require('../utils/response');
 const exportService = require('../services/exportService');
+const Security = require('../models/Security');
+
+const getPnLData = async (req, res, next) => {
+  try {
+    const result = await reportService.getPnLRecords(req.body);
+    const { startDate, endDate, ...securitiesData } = result;
+    const securityIds = Object.keys(securitiesData);
+
+    const securities = await Security.find({ _id: { $in: securityIds } }).select('name');
+    const securityMap = {};
+    securities.forEach(sec => { securityMap[sec._id.toString()] = sec.name; });
+
+    const formattedSecurities = securityIds.map(secId => ({
+      securityId: secId,
+      securityName: securityMap[secId] || 'Unknown',
+      transactions: securitiesData[secId]
+    }));
+
+    return ApiResponse.success(res, { startDate, endDate, securities: formattedSecurities });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const exportPnLReport = async (req, res, next) => {
   try {
@@ -49,6 +72,7 @@ const exportLedgerReport = async (req, res, next) => {
 };
 
 module.exports = {
+  getPnLData,
   exportPnLReport,
   exportHoldingsReport,
   exportLedgerReport

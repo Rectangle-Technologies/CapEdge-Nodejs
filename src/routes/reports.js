@@ -27,6 +27,7 @@ const ledgerQueryValidation = [
 ];
 
 // P&L Report Routes
+router.post('/pnl', pnlValidation, handleValidationErrors, validateFinancialYearAccess, reportController.getPnLData);
 router.post('/pnl/export', pnlValidation, handleValidationErrors, validateFinancialYearAccess, reportController.exportPnLReport);
 
 // All holdings Report Routes
