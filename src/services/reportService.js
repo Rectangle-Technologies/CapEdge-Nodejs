@@ -22,7 +22,8 @@ const getPnLRecords = async (data) => {
 
   // Validate financial year has required tax rates
   if (financialYear.ltcgRate === undefined || financialYear.ltcgRate === null ||
-    financialYear.stcgRate === undefined || financialYear.stcgRate === null) {
+    financialYear.stcgRate === undefined || financialYear.stcgRate === null ||
+    financialYear.intradayRate === undefined || financialYear.intradayRate === null) {
     const error = new Error('Financial Year tax rates are not configured');
     error.statusCode = 400;
     error.reasonCode = 'INVALID_DATA';
@@ -154,10 +155,10 @@ const getPnLRecords = async (data) => {
 
         if (sellTransaction) {
           const resultType = sellTransaction.price >= txn.price ? 'gain' : 'loss';
-          const gainType = 'STCG';
+          const gainType = 'Intraday';
           const taxableAmount = ((sellTransaction.price - txn.price) * txn.quantity) - (sellTransaction.transactionCost || 0) - (txn.transactionCost || 0);
           let calculatedTax = 0;
-          calculatedTax = taxableAmount * financialYear.stcgRate;
+          calculatedTax = taxableAmount * financialYear.intradayRate;
 
           if (!result[txn.securityId]) {
             result[txn.securityId] = [];

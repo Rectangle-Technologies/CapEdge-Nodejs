@@ -43,6 +43,10 @@ const financialYearSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'LTCG rate is required']
   },
+  intradayRate: {
+    type: Number,
+    required: [true, 'Intraday rate is required']
+  },
   reports: {
     type: Map,
     of: reportSchema,

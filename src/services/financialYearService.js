@@ -52,7 +52,8 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	var currentFY = await createFinancialYear({
 		date: transactionDate,
 		stcgRate: prevFY.stcgRate,
-		ltcgRate: prevFY.ltcgRate
+		ltcgRate: prevFY.ltcgRate,
+		intradayRate: prevFY.intradayRate
 	}, session);
 	
 	// Save the current holdings and balance in the previous FY report
@@ -97,7 +98,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 };
 
 const  createFinancialYear = async (data, session = null) => {
-	const { date, stcgRate, ltcgRate } = data;
+	const { date, stcgRate, ltcgRate, intradayRate } = data;
 
 	const existingFinancialYear = await FinancialYear.findOne({
 		startDate: { $lte: date },
@@ -121,6 +122,7 @@ const  createFinancialYear = async (data, session = null) => {
 		endDate: new Date(Date.UTC(fyStartYear + 1, 2, 31, 23, 59, 59, 999)), // March 31st
 		stcgRate: stcgRate,
 		ltcgRate: ltcgRate,
+		intradayRate: intradayRate,
 		title: `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`
 	});
 	await financialYear.save({ session });
@@ -141,6 +143,7 @@ const updateFinancialYear = async (id, data) => {
 	financialYear.endDate = new Date(Date.UTC(data.endDate.getFullYear(), data.endDate.getMonth(), data.endDate.getDate(), 23, 59, 59, 999));
 	financialYear.stcgRate = data.stcgRate / 100;
 	financialYear.ltcgRate = data.ltcgRate / 100;
+	financialYear.intradayRate = data.intradayRate / 100;
 
 	await financialYear.save();
 	return financialYear;
