@@ -13,7 +13,10 @@ const financialYearValidation = [
         .isFloat({ min: 0, max: 100 }).withMessage('STCG rate must be between 0 and 100'),
     body('ltcgRate')
         .notEmpty().withMessage('LTCG rate is required')
-        .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100')
+        .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100'),
+    body('intradayRate')
+        .notEmpty().withMessage('Intraday rate is required')
+        .isFloat({ min: 0, max: 100 }).withMessage('Intraday rate must be between 0 and 100')
 ]
 
 const financialYearUpdateValidation = [
@@ -28,7 +31,10 @@ const financialYearUpdateValidation = [
         .isFloat({ min: 0, max: 100 }).withMessage('STCG rate must be between 0 and 100'),
     body('ltcgRate')
         .notEmpty().withMessage('LTCG rate is required')
-        .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100')
+        .isFloat({ min: 0, max: 100 }).withMessage('LTCG rate must be between 0 and 100'),
+    body('intradayRate')
+        .notEmpty().withMessage('Intraday rate is required')
+        .isFloat({ min: 0, max: 100 }).withMessage('Intraday rate must be between 0 and 100')
 ]
 
 router.get('/get-all', financialYearController.getFinancialYears);
