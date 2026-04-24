@@ -42,11 +42,12 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             let closingBalance = openingBalance;
             const holdings = previousHoldings.sort((a, b) => a.buyDate - b.buyDate) || [];
 
-            // Loop over transactions to update holdings and balances
+            // Loop over transactions ONLY to maintain holdings (FIFO matching).
+            // closingBalance is computed exclusively from ledger entries below to
+            // avoid double-counting trades (each trade already has a corresponding
+            // LedgerEntry with transactionAmount = ±qty*price).
             for (let fyTransaction of fyTransactions) {
-                // Update holdings based on transaction type
                 if (fyTransaction.type === 'BUY') {
-                    closingBalance -= fyTransaction.quantity * fyTransaction.price;
                     if (fyTransaction.deliveryType === 'Delivery') {
                         holdings.push({
                             buyDate: fyTransaction.date,
@@ -60,7 +61,6 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                         });
                     }
                 } else if (fyTransaction.type === 'SELL') {
-                    closingBalance += fyTransaction.quantity * fyTransaction.price;
                     if (fyTransaction.deliveryType === 'Delivery') {
                         // Match with existing holdings (FIFO)
                         let quantityToSell = fyTransaction.quantity;
@@ -91,14 +91,12 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 date: { $gte: financialYear.startDate, $lte: financialYear.endDate }
             }).sort({ date: 1, createdAt: 1, _id: 1 }).session(session);
 
-            // Compute running balance for every entry and collect bulk updates
+            // Compute running balance for every entry (trade-linked or not) and
+            // collect bulk updates. Each ledger entry — including those auto-
+            // created from trades — contributes to closingBalance exactly once.
             const balanceBulkOps = [];
             for (let entry of ledgerEntries) {
-                if (!entry.tradeTransactionId) {
-                    // Non-trade entries affect the closing balance
-                    closingBalance += entry.transactionAmount;
-                }
-                // Every entry (trade-linked or not) gets a running balance snapshot
+                closingBalance += entry.transactionAmount;
                 balanceBulkOps.push({
                     updateOne: {
                         filter: { _id: entry._id },

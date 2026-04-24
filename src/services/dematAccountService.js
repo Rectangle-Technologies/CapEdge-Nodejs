@@ -105,10 +105,12 @@ const createDematAccount = async (accountData) => {
 
   // Add a ledger entry for initial balance if balance > 0
   if (parseFloat(balance) > 0) {
+    const today = new Date();
+    const todayMidnightUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
     await addLedgerEntry({
       dematAccountId: dematAccount._id,
       transactionAmount: parseFloat(balance),
-      date: new Date(),
+      date: todayMidnightUTC,
       remarks: 'Opening balance'
     });
   }
