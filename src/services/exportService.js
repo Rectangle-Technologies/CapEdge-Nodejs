@@ -466,7 +466,7 @@ const exportLedgerToExcel = async (data, sheetName) => {
   const inrFormat = '₹#,##0.00';
 
   // Row 1: Period information
-  worksheet.mergeCells('A1:E1');
+  worksheet.mergeCells('A1:F1');
   worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
   worksheet.getCell('A1').font = { bold: true };
   worksheet.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
@@ -478,7 +478,8 @@ const exportLedgerToExcel = async (data, sheetName) => {
   worksheet.getCell('B3').value = 'Type';
   worksheet.getCell('C3').value = 'Credit';
   worksheet.getCell('D3').value = 'Debit';
-  worksheet.getCell('E3').value = 'Remarks';
+  worksheet.getCell('E3').value = 'Balance';
+  worksheet.getCell('F3').value = 'Remarks';
   
   worksheet.getRow(3).font = { bold: true };
   worksheet.getRow(3).alignment = { horizontal: 'center', vertical: 'middle' };
@@ -489,7 +490,8 @@ const exportLedgerToExcel = async (data, sheetName) => {
     { key: 'B', width: 12 }, // Type
     { key: 'C', width: 20 }, // Credit
     { key: 'D', width: 20 }, // Debit
-    { key: 'E', width: 40 }, // Remarks
+    { key: 'E', width: 20 }, // Balance
+    { key: 'F', width: 40 }, // Remarks
   ];
 
   // Sort ledger entries by date
@@ -516,8 +518,14 @@ const exportLedgerToExcel = async (data, sheetName) => {
       worksheet.getCell(`D${currentRow}`).font = { color: { argb: 'FFFF0000' } };
       totalDebit += Math.abs(entry.transactionAmount);
     }
-    
-    worksheet.getCell(`E${currentRow}`).value = entry.remarks || '';
+
+    if (entry.balanceAfterEntry != null) {
+      worksheet.getCell(`E${currentRow}`).value = entry.balanceAfterEntry;
+      worksheet.getCell(`E${currentRow}`).numFmt = inrFormat;
+      worksheet.getCell(`E${currentRow}`).font = { color: { argb: entry.balanceAfterEntry >= 0 ? 'FF008000' : 'FFFF0000' } };
+    }
+
+    worksheet.getCell(`F${currentRow}`).value = entry.remarks || '';
     
     currentRow++;
   });
@@ -542,6 +550,7 @@ const exportLedgerToExcel = async (data, sheetName) => {
   worksheet.getCell(`C${currentRow}`).border = { top: { style: 'thin' } };
   worksheet.getCell(`D${currentRow}`).border = { top: { style: 'thin' } };
   worksheet.getCell(`E${currentRow}`).border = { top: { style: 'thin' } };
+  worksheet.getCell(`F${currentRow}`).border = { top: { style: 'thin' } };
 
   // Return buffer for download
   const buffer = await workbook.xlsx.writeBuffer();

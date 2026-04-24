@@ -1,0 +1,190 @@
+Title: Ledger Running Balance Feature and Stability Fixes Report
+Date: 24-Apr-2026
+Scope: CapEdge-Nodejs and CapEdge-React ledger flow
+Author: GitHub Copilot (GPT-5.3-Codex)
+
+1) Objective
+- Add persisted "balance after each ledger entry" so ledger history is auditable row-by-row.
+- Keep existing business logic for holdings/FY reports intact.
+- Fix two correctness issues requested during planning:
+  a) Financial year processing order in record recalculation.
+  b) Missing remarks in opening balance ledger entry creation.
+
+2) Baseline Observations Before Changes
+2.1 Ledger model and storage
+- Ledger entries had no field to persist post-entry running balance.
+- Only aggregate balances were persisted:
+  - DematAccount.balance (latest account-level scalar)
+  - FinancialYear.reports[dematAccountId].openingBalance/closingBalance
+
+2.2 Recalculation behavior
+- updateRecords(transactionDate, dematAccountId, session) recalculated holdings and balances across FYs.
+- FY query had no explicit sort; order depended on DB natural order.
+- Ledger entries inside FY were sorted by date only.
+- For closing balance update, trade-linked ledger entries were skipped to avoid double counting against transaction loop.
+
+2.3 API/UI/reporting behavior
+- Ledger list API returned date/type/amount/remarks and trade details, but no running balance.
+- Ledger UI table had no Balance column.
+- Backend ledger export had no Balance column.
+
+2.4 Correctness bug in demat account creation
+- createDematAccount added opening ledger entry when initial balance > 0.
+- remarks is required in LedgerEntry schema, but the opening entry call did not send remarks.
+- Result: potential validation failure on opening-balance account creation.
+
+3) Design Decisions Taken
+3.1 Persist running balance at source-of-truth level
+- Added balanceAfterEntry on LedgerEntry and computed it in recordService during recalculation.
+- This avoids recomputing running balance on read/export and keeps behavior deterministic.
+
+3.2 Preserve existing financial logic
+- Did not replace existing closing balance computation semantics.
+- Existing transaction and holdings processing remains authoritative for FY reports and holdings.
+
+3.3 Deterministic ordering for stable running balance
+- Added explicit FY sort by startDate ascending.
+- Added ledger sort by date asc, createdAt asc, _id asc for deterministic tie-breaks.
+
+3.4 Performance approach
+- Used bulkWrite for per-entry balanceAfterEntry updates in-session to avoid N individual save calls.
+
+4) Backend Changes Implemented
+4.1 File: src/models/LedgerEntry.js
+Change:
+- Added field:
+  balanceAfterEntry: {
+    type: Number,
+    default: null
+  }
+Impact:
+- Enables persistent running balance snapshots per entry.
+- Backward compatible with existing documents (null default).
+
+4.2 File: src/services/recordService.js
+Changes:
+- FY fetch now explicitly sorted:
+  FinancialYear.find({ endDate: { $gte: transactionDate } }).sort({ startDate: 1 })
+- Ledger fetch now deterministically sorted:
+  .sort({ date: 1, createdAt: 1, _id: 1 })
+- Added bulk running-balance update pipeline per FY:
+  - Iterate ledger entries in order.
+  - For non-trade entries, mutate closingBalance by transactionAmount.
+  - For every entry (trade-linked and non-trade), write balanceAfterEntry snapshot with current closingBalance.
+  - Persist via LedgerEntry.bulkWrite(balanceBulkOps, { session }).
+
+Important behavior note:
+- Trade-linked entries still do not alter closingBalance in ledger loop (existing anti-double-count behavior preserved).
+- They now receive a stored balance snapshot corresponding to the running state at their sorted position.
+
+4.3 File: src/services/ledgerService.js
+Change:
+- Added balanceAfterEntry to aggregation projection in getLedgerEntries().
+Impact:
+- Ledger list API now provides per-row running balance for UI consumers.
+
+4.4 File: src/services/reportService.js
+Change:
+- Added balanceAfterEntry to getLedgerRecords() projection.
+Impact:
+- Export/reporting dataset includes persisted running balance.
+
+4.5 File: src/services/exportService.js
+Changes in exportLedgerToExcel:
+- Expanded period merge from A1:E1 to A1:F1.
+- Header columns changed from:
+  Date, Type, Credit, Debit, Remarks
+  to
+  Date, Type, Credit, Debit, Balance, Remarks
+- Adjusted column widths to include Balance.
+- Populated Balance column from entry.balanceAfterEntry when available.
+- Applied INR numFmt and positive/negative color styling to Balance.
+- Shifted Remarks from E to F.
+- Updated total-row top borders to include column F.
+Impact:
+- Ledger Excel export now contains running balance per row.
+
+4.6 File: src/services/dematAccountService.js
+Change:
+- Added default remarks for opening balance entry:
+  remarks: 'Opening balance'
+Impact:
+- Prevents schema validation failure when creating demat account with initial balance > 0.
+
+5) Frontend Changes Implemented (for end-to-end visibility)
+5.1 File: CapEdge-React/src/pages/ledger/components/LedgerTable.jsx
+Changes:
+- Added Balance header column between Debit and Remarks.
+- Updated empty-state row colSpan 7 -> 8.
+Impact:
+- Table structure supports displaying running balance.
+
+5.2 File: CapEdge-React/src/pages/ledger/components/LedgerRow.jsx
+Changes:
+- Added Balance cell rendering entry.balanceAfterEntry (or '-' when null).
+- Applied positive/negative color styling.
+- Updated expandable detail row colSpan 7 -> 8.
+Impact:
+- Ledger row now shows persisted running balance consistently.
+
+5.3 File: CapEdge-React/src/pages/ledger/utils/exportToExcel.js
+Change:
+- Replaced legacy balance mapping from entry.balance to entry.balanceAfterEntry with null guard.
+Impact:
+- Legacy utility no longer references non-existent field name.
+
+6) Core Logic Impact Assessment (Post-Change)
+6.1 Holdings logic
+- No changes to buy/sell FIFO holdings behavior.
+- No changes to Holdings collection write/delete flow.
+- Risk level: Low.
+
+6.2 FY report logic
+- openingBalance/closingBalance computation flow remains unchanged in meaning.
+- FY ordering is now explicit and deterministic (stability improvement).
+- Risk level: Low to Medium (touches central recalculation path, but semantics preserved).
+
+6.3 Demat account balance logic
+- DematAccount.balance update remains unchanged except more deterministic upstream order.
+- Opening balance ledger creation is now valid due to default remarks.
+- Risk level: Low.
+
+6.4 Transaction-linked ledger entries
+- Existing anti-double-count behavior retained by not mutating closingBalance for trade-linked entries in ledger loop.
+- New behavior writes snapshots for those rows as well.
+- Risk level: Medium (depends on chronological consistency of transaction vs ledger row timestamps; deterministic sort added to reduce ambiguity).
+
+6.5 API contracts
+- Added non-breaking field balanceAfterEntry to ledger APIs.
+- Existing consumers remain compatible.
+- Risk level: Low.
+
+7) Validation Performed
+- Static diagnostics checks run on all modified files (backend + frontend).
+- Result: no diagnostics errors reported in changed files.
+
+8) Known Tradeoffs and Remaining Considerations
+- No backfill/migration script created (as requested: clean DB assumption).
+- If historical data is imported later, balanceAfterEntry will be null until updateRecords recalculates those periods.
+- Chronological tie handling now uses date + createdAt + _id for determinism.
+- No schema indexes added for this feature (by decision to avoid additional impact at this stage).
+
+9) Files Changed Summary
+Backend:
+- src/models/LedgerEntry.js
+- src/services/recordService.js
+- src/services/ledgerService.js
+- src/services/reportService.js
+- src/services/exportService.js
+- src/services/dematAccountService.js
+
+Frontend:
+- src/pages/ledger/components/LedgerTable.jsx
+- src/pages/ledger/components/LedgerRow.jsx
+- src/pages/ledger/utils/exportToExcel.js
+
+10) Conclusion
+- The system now persists and exposes per-entry running balance without changing the core holdings/FY/account balance business model.
+- The recalculation pipeline is more deterministic due to explicit FY and entry sorting.
+- Opening-balance demat account creation is now protected from required-remarks validation failure.
+- Implementation is backward compatible for schema and API consumers under the clean DB rollout assumption.

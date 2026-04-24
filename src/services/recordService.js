@@ -25,10 +25,10 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         var previousClosingBalance = previousFinancialYear.reports.get(dematAccountId)?.closingBalance || 0;
         var latestFY;
 
-        // Fetch all the FY inluding and after the transaction date
+        // Fetch all the FY including and after the transaction date, sorted chronologically
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
-        }).session(session);
+        }).sort({ startDate: 1 }).session(session);
 
         for (let financialYear of financialYearsToUpdate) {
             // Fetch transactions for the FY
@@ -89,12 +89,26 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             const ledgerEntries = await LedgerEntry.find({
                 dematAccountId: dematAccountId,
                 date: { $gte: financialYear.startDate, $lte: financialYear.endDate }
-            }).sort({ date: 1 }).session(session);
+            }).sort({ date: 1, createdAt: 1, _id: 1 }).session(session);
 
-            // Loop over ledger entries to update closing balance
+            // Compute running balance for every entry and collect bulk updates
+            const balanceBulkOps = [];
             for (let entry of ledgerEntries) {
-                if (entry.tradeTransactionId) continue; // Skip entries linked to transactions
-                closingBalance += entry.transactionAmount;
+                if (!entry.tradeTransactionId) {
+                    // Non-trade entries affect the closing balance
+                    closingBalance += entry.transactionAmount;
+                }
+                // Every entry (trade-linked or not) gets a running balance snapshot
+                balanceBulkOps.push({
+                    updateOne: {
+                        filter: { _id: entry._id },
+                        update: { $set: { balanceAfterEntry: closingBalance } }
+                    }
+                });
+            }
+
+            if (balanceBulkOps.length > 0) {
+                await LedgerEntry.bulkWrite(balanceBulkOps, { session });
             }
 
             // Update the report for the financial year

@@ -108,7 +108,8 @@ const createDematAccount = async (accountData) => {
     await addLedgerEntry({
       dematAccountId: dematAccount._id,
       transactionAmount: parseFloat(balance),
-      date: new Date()
+      date: new Date(),
+      remarks: 'Opening balance'
     });
   }
   

@@ -127,6 +127,7 @@ const getLedgerEntries = async (filters = {}) => {
       type: 1,
       transactionAmount: 1,
       remarks: 1,
+      balanceAfterEntry: 1,
       tradeTransactionId: {
         $cond: [
           { $ne: ['$tradeTransactionId', null] },

@@ -552,6 +552,7 @@ const getLedgerRecords = async (dematAccountId, filters) => {
         remarks: 1,
         tradeTransactionId: 1,
         type: 1,
+        balanceAfterEntry: 1,
         createdAt: 1,
         updatedAt: 1
       }

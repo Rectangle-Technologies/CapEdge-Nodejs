@@ -23,6 +23,10 @@ const ledgerEntrySchema = new mongoose.Schema({
     trim: true,
     required: [true, 'Remarks are required'],
   },
+  balanceAfterEntry: {
+    type: Number,
+    default: null
+  }
 }, {
   timestamps: true
 });
