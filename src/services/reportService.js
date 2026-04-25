@@ -517,30 +517,32 @@ const getLedgerRecords = async (dematAccountId, filters) => {
     {
       $lookup: {
         from: 'transactions',
-        localField: 'tradeTransactionId',
-        foreignField: '_id',
-        as: 'transaction'
-      }
-    },
-    {
-      $unwind: {
-        path: '$transaction',
-        preserveNullAndEmptyArrays: true
+        let: { txIds: '$tradeTransactionIds' },
+        pipeline: [
+          { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$txIds', []] }] } } },
+          { $project: { _id: 1, type: 1 } }
+        ],
+        as: 'trades'
       }
     },
     {
       $addFields: {
         type: {
-          $ifNull: [
-            '$transaction.type',
-            {
-              $cond: {
-                if: { $gt: ['$transactionAmount', 0] },
-                then: 'CREDIT',
-                else: 'DEBIT'
+          $switch: {
+            branches: [
+              {
+                case: { $eq: [{ $size: '$trades' }, 0] },
+                then: {
+                  $cond: { if: { $gt: ['$transactionAmount', 0] }, then: 'CREDIT', else: 'DEBIT' }
+                }
+              },
+              {
+                case: { $eq: [{ $size: '$trades' }, 1] },
+                then: { $arrayElemAt: ['$trades.type', 0] }
               }
-            }
-          ]
+            ],
+            default: 'BUNDLE'
+          }
         }
       }
     },
@@ -550,7 +552,7 @@ const getLedgerRecords = async (dematAccountId, filters) => {
         dematAccountId: 1,
         transactionAmount: 1,
         remarks: 1,
-        tradeTransactionId: 1,
+        tradeTransactionIds: 1,
         type: 1,
         balanceAfterEntry: 1,
         createdAt: 1,

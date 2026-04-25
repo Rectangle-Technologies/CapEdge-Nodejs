@@ -51,10 +51,6 @@ const addLedgerEntryValidation = [
     .withMessage('Date is required')
     .isISO8601()
     .withMessage('Invalid date format'),
-  body('tradeTransactionId')
-    .optional()
-    .isMongoId()
-    .withMessage('Invalid trade transaction ID'),
   body('remarks')
     .notEmpty()
     .withMessage('Remarks are required')

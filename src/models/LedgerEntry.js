@@ -6,9 +6,13 @@ const ledgerEntrySchema = new mongoose.Schema({
     ref: 'DematAccount',
     required: [true, 'Demat account ID is required'],
   },
-  tradeTransactionId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Transaction',
+  tradeTransactionIds: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Transaction',
+    }],
+    default: [],
+    index: true
   },
   transactionAmount: {
     type: Number,

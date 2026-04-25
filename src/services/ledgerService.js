@@ -37,82 +37,71 @@ const getLedgerEntries = async (filters = {}) => {
   // Calculate offset for pagination
   const offset = (pageNo - 1) * limit;
 
-  // Aggregation pipeline for ledger entries
+  // Aggregation pipeline for ledger entries. Each entry may bundle 0..N trades:
+  //   - 0 trades -> manual CREDIT/DEBIT
+  //   - 1 trade  -> single-trade bundle, chip uses that trade's type
+  //   - 2+       -> multi-trade bundle, type = 'BUNDLE' (UI hides chip)
   const pipeline = [
     { $match: matchQuery },
     {
       $lookup: {
         from: 'transactions',
-        localField: 'tradeTransactionId',
-        foreignField: '_id',
-        as: 'transaction'
-      }
-    },
-    {
-      $unwind: {
-        path: '$transaction',
-        preserveNullAndEmptyArrays: true
-      }
-    },
-    {
-      $lookup: {
-        from: 'securities',
-        localField: 'transaction.securityId',
-        foreignField: '_id',
-        as: 'security'
-      }
-    },
-    {
-      $unwind: {
-        path: '$security',
-        preserveNullAndEmptyArrays: true
+        let: { txIds: '$tradeTransactionIds' },
+        pipeline: [
+          { $match: { $expr: { $in: ['$_id', { $ifNull: ['$$txIds', []] }] } } },
+          {
+            $lookup: {
+              from: 'securities',
+              localField: 'securityId',
+              foreignField: '_id',
+              as: 'security'
+            }
+          },
+          { $unwind: { path: '$security', preserveNullAndEmptyArrays: true } },
+          { $sort: { _id: 1 } },
+          {
+            $project: {
+              _id: 1,
+              type: 1,
+              quantity: 1,
+              price: 1,
+              referenceNumber: 1,
+              securityName: '$security.name'
+            }
+          }
+        ],
+        as: 'trades'
       }
     },
     {
       $addFields: {
         type: {
-          $ifNull: [
-            '$transaction.type',
-            {
-              $cond: {
-                if: { $gt: ['$transactionAmount', 0] },
-                then: 'CREDIT',
-                else: 'DEBIT'
+          $switch: {
+            branches: [
+              {
+                case: { $eq: [{ $size: '$trades' }, 0] },
+                then: {
+                  $cond: { if: { $gt: ['$transactionAmount', 0] }, then: 'CREDIT', else: 'DEBIT' }
+                }
+              },
+              {
+                case: { $eq: [{ $size: '$trades' }, 1] },
+                then: { $arrayElemAt: ['$trades.type', 0] }
               }
-            }
-          ]
+            ],
+            default: 'BUNDLE'
+          }
         }
       }
     }
   ];
 
-  // Add transaction type filter if provided
-  if (transactionType) {
-    if (transactionType === 'BUY') {
-      pipeline.push({
-        $match: {
-          type: 'BUY'
-        }
-      });
-    } else if (transactionType === 'SELL') {
-      pipeline.push({
-        $match: {
-          type: 'SELL'
-        }
-      });
-    } else if (transactionType === 'CREDIT') {
-      pipeline.push({
-        $match: {
-          type: 'CREDIT'
-        }
-      });
-    } else if (transactionType === 'DEBIT') {
-      pipeline.push({
-        $match: {
-          type: 'DEBIT'
-        }
-      });
-    }
+  // BUY/SELL filters match any trade in a bundle. CREDIT/DEBIT only match
+  // non-trade entries.
+  if (transactionType === 'BUY' || transactionType === 'SELL') {
+    pipeline.push({ $match: { 'trades.type': transactionType } });
+  } else if (transactionType === 'CREDIT' || transactionType === 'DEBIT') {
+    pipeline.push({ $match: { type: transactionType } });
   }
 
   // Sort by date (newest to oldest)
@@ -128,19 +117,7 @@ const getLedgerEntries = async (filters = {}) => {
       transactionAmount: 1,
       remarks: 1,
       balanceAfterEntry: 1,
-      tradeTransactionId: {
-        $cond: [
-          { $ne: ['$tradeTransactionId', null] },
-          {
-            _id: '$transaction._id',
-            securityName: '$security.name',
-            quantity: '$transaction.quantity',
-            price: '$transaction.price',
-            referenceNumber: '$transaction.referenceNumber',
-          },
-          null
-        ]
-      }
+      trades: 1
     }
   });
 
@@ -249,7 +226,7 @@ const deleteLedgerEntry = async (entryId) => {
     throw error;
   }
 
-  if (entry.tradeTransactionId) {
+  if (entry.tradeTransactionIds && entry.tradeTransactionIds.length > 0) {
     const error = new Error('Cannot delete a trade-linked ledger entry. Delete the associated transaction instead.');
     error.statusCode = 400;
     error.reasonCode = 'TRADE_LINKED';

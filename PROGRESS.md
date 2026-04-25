@@ -9,6 +9,15 @@ Shared coordination folder: `C:\Users\Naman Khater\OneDrive\Desktop\capedge`
 
 ## Bugs Found & Fixed
 
+### BUG-006 — Bundle remarks count is stale after partial delete (cosmetic)
+- **File**: `CapEdge-Nodejs/src/services/transactionService.js` (deleteTransaction, bundle save branch)
+- **Symptom**: TC-023 deleted one trade from a 2-trade bundle. The bundle's `transactionAmount` correctly recomputed to -₹5,040 and the type chip correctly reverted to `BUY` (since the API derives type from `trades.length`), but the `remarks` field still read `"Trades for ref: BUNDLE-T2 (2 trades)"` instead of `"(1 trade)"`.
+- **Root cause**: In the partial-delete branch of `deleteTransaction`, only `tradeTransactionIds` and `transactionAmount` were updated on the bundle. The `remarks` string is stamped at create-time and was never recomputed.
+- **Fix**: After updating amount and ids in the partial-delete branch, also re-derive `bundle.remarks` from the deleted tx's `referenceNumber` (which is shared across all trades in the bundle since they came from the same POST) and the new count.
+- **Found by**: TC-023 Notes
+- **Severity**: Trivial (cosmetic — chip and amount were correct, just the count text was stale)
+- **Status**: Fixed in code. Existing stale-remarks rows in DB will self-heal on the next partial delete.
+
 ### BUG-005 — recordService double-counts trades against per-row running balance
 - **File**: `CapEdge-Nodejs/src/services/recordService.js` lines 47-86 (transactions loop) interacting with the ledger loop at 89-108
 - **Symptom**: After TC-014 created a BUY trade, every prior ledger row's `balanceAfterEntry` was off by exactly -₹25,000 (the BUY trade amount). Stored: Backdated -20k, Opening 30k, Salary 55k, Withdrawal 45k, BUY 45k. Expected: 5k, 55k, 80k, 70k, 45k. Aggregate dashboard balance was correct (₹45k) — only per-row snapshots were wrong.
@@ -105,6 +114,35 @@ The two High-severity bugs (004, 005) were both in code touched by the original 
 - Excel export with the new Balance column
 - Empty-state UI rendering with corrected colspan
 | TC-017 | Empty ledger state | PASS | Upstox empty demat renders correctly. `<td colspan="8">` confirmed via DOM inspection (correctly bumped 7→8 for the new Balance column). Centered text, no layout breakage. |
+| TC-018 | Pre-migration ledger renders cleanly (Zerodha) | PASS | All 6 existing entries render. BUY-RELIANCE-001 + SELL-RELIANCE-001 correctly appear as plain DEBIT/CREDIT (no chip/chevron) since their old `tradeTransactionId` field can't be matched by the new aggregation. Confirms migration-held behavior is graceful. |
+| TC-019 | Seed Upstox with ₹1,00,000 CREDIT | PASS | Setup TC. Manual CREDIT created on clean Upstox; `addLedgerEntry` flow unaffected by the bundling change. |
+| TC-020 | Single Delivery BUY → ONE bundled entry | PASS | RELIANCE 4@2500 + ₹50 charges → exactly 1 ledger row, BUY chip, Debit -₹10,050 (charges folded in, NO separate "Charges for ..." entry), expand shows 1 trade. Confirms the bundling change for the single-row case. |
+| TC-021 | ⭐ Multi-row submission → ONE bundle "2 trades" | PASS | 2 BUYs (2@2510 + 3@2530) with charges in single POST → exactly 1 ledger row, chip "2 trades", Debit -₹12,655, expand shows both trades with their refs/qtys/prices. Headline test of the enhancement. |
+| TC-022 | Intraday → ONE bundle holding both legs | PASS | Intraday RELIANCE 10qty (buy 2500 / sell 2530) + ₹100 charges → 1 row, chip "2 trades", Credit +₹200 (net inflow with charges folded), expand shows BUY leg + SELL leg. |
+| TC-023 | Delete one trade from multi-trade bundle | PASS+BUG-FOUND | Deleted second trade in BUNDLE-T2 → bundle survived with 1 trade left, chip reverted to BUY (single-trade bundle), Debit recomputed to -₹5,040, balance rippled correctly. Cowork flagged stale remarks count → BUG-006. |
+| TC-024 | Delete the last trade in a bundle | PASS | Deleted remaining trade in BUNDLE-T2 → entire ledger entry removed (empty `tradeTransactionIds` triggers delete). All other entries unchanged; balance rippled correctly to ₹90,150. Confirms bundle-on-empty-deletion path. |
+
+---
+
+## Phase 6 Final Summary — Bundled Ledger Entries Run Complete (2026-04-25 ~19:35 IST)
+
+**7 of 7 Phase 6 test cases PASSED end-to-end.** Cumulative across both runs: **24 of 24 PASSED.**
+
+1 new bug found and fixed during Phase 6:
+
+| ID | Severity | Where | Found by |
+|----|----------|-------|----------|
+| BUG-006 | Trivial (cosmetic) | `transactionService.js` deleteTransaction — bundle remarks `"(N trades)"` count was stamped at create-time and never recomputed when a trade was unlinked | TC-023 Notes |
+
+**Coverage validated for the bundling enhancement:**
+- Single-row Delivery BUY → 1 bundled entry, charges folded in (TC-020)
+- Multi-row submission (2 rows in one POST) → 1 bundled entry with `2 trades` chip (TC-021)
+- Intraday (2 internal legs from one row) → 1 bundled entry with both legs (TC-022)
+- Partial delete (unlink one trade from a multi-trade bundle, recompute amount, chip reverts to single-trade type) (TC-023)
+- Full delete (last trade unlinked → bundle entry deleted entirely; balance ripple) (TC-024)
+- Pre-migration data renders cleanly as plain DEBIT/CREDIT (no chip/chevron) — confirms migration-held graceful degradation (TC-018)
+
+**Migration status:** Still on hold per user instruction. Old `tradeTransactionId` (singular) entries created before this change continue to render as plain CREDIT/DEBIT rows. Migration script can be run anytime to convert them; the recipe is `tradeTransactionIds = [tradeTransactionId]` + `$unset tradeTransactionId` per doc.
 
 ---
 

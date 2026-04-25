@@ -112,7 +112,7 @@ const validateTransaction = async (transactionData, session) => {
     if (!security) throwNotFoundError('Security not found');
 };
 
-const handleIntradayTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
+const handleIntradayTransaction = async (transactionData, baseTransaction, session) => {
     const [buyTransaction] = await Transaction.create([{
         ...baseTransaction,
         type: 'BUY',
@@ -127,30 +127,13 @@ const handleIntradayTransaction = async (transactionData, baseTransaction, trans
         quantity: transactionData.quantity,
         price: transactionData.sellPrice,
         buyTransactionId: buyTransaction._id,
-        transactionCost: transactionData.transactionCost / 2 || 0  
+        transactionCost: transactionData.transactionCost / 2 || 0
     }], { session });
-
-    await LedgerEntry.create([
-        {
-            dematAccountId: transactionData.dematAccountId,
-            tradeTransactionId: buyTransaction._id,
-            transactionAmount: -transactionData.buyPrice * transactionData.quantity,
-            date: transactionDate,
-            remarks: 'Intraday BUY, contract reference: ' + (transactionData.referenceNumber || '')
-        },
-        {
-            dematAccountId: transactionData.dematAccountId,
-            tradeTransactionId: sellTransaction._id,
-            transactionAmount: transactionData.sellPrice * transactionData.quantity,
-            date: transactionDate,
-            remarks: 'Intraday SELL, contract reference: ' + (transactionData.referenceNumber || '')
-        }
-    ], { session });
 
     return [buyTransaction, sellTransaction];
 };
 
-const handleDeliveryTransaction = async (transactionData, baseTransaction, transactionDate, session) => {
+const handleDeliveryTransaction = async (transactionData, baseTransaction, session) => {
     const [transaction] = await Transaction.create([{
         ...baseTransaction,
         type: transactionData.type,
@@ -158,18 +141,6 @@ const handleDeliveryTransaction = async (transactionData, baseTransaction, trans
         price: transactionData.price,
         transactionCost: transactionData.transactionCost || 0,
         isIpo: transactionData.isIpo || false
-    }], { session });
-
-    if (transactionData.isIpo) {
-        return [transaction];
-    }
-
-    await LedgerEntry.create([{
-        dematAccountId: transactionData.dematAccountId,
-        tradeTransactionId: transaction._id,
-        transactionAmount: (transactionData.type === 'BUY' ? -1 : 1) * transactionData.price * transactionData.quantity,
-        date: transactionDate,
-        remarks: transactionData.type + ' transaction, contract reference: ' + (transactionData.referenceNumber || '')
     }], { session });
 
     return [transaction];
@@ -191,8 +162,8 @@ const createTransaction = async (transactionData, session) => {
     };
 
     return transactionData.deliveryType === 'Intraday'
-        ? await handleIntradayTransaction(transactionData, baseTransaction, transactionDate, session)
-        : await handleDeliveryTransaction(transactionData, baseTransaction, transactionDate, session);
+        ? await handleIntradayTransaction(transactionData, baseTransaction, session)
+        : await handleDeliveryTransaction(transactionData, baseTransaction, session);
 };
 
 /**
@@ -274,20 +245,31 @@ const createTransactions = async (transactions) => {
     // Execute with retry logic
     return await executeTransactionWithRetry(async (session) => {
         const result = [];
-        
+
         for (const txData of transactions) {
             const txResult = await createTransaction(txData, session);
             result.push(...txResult);
         }
 
-        const totalTransactionCost = result.reduce((sum, tx) => sum + (tx.transactionCost || 0), 0);
-        const remarks = `Charges for ${transactions[0]?.referenceNumber || 'transaction'}`;
-        if (totalTransactionCost > 0 && !transactions[0]?.isIpo) {
+        // Bundle every non-IPO trade in this submission into a single ledger entry.
+        // transactionAmount = sum(signed trade amounts) - sum(transactionCost), so
+        // charges roll into the same row in the ledger view.
+        const ledgerTxs = result.filter(tx => !tx.isIpo);
+        if (ledgerTxs.length > 0) {
+            const bundleAmount = ledgerTxs.reduce((sum, tx) => {
+                const signed = (tx.type === 'BUY' ? -1 : 1) * tx.quantity * tx.price;
+                return sum + signed - (tx.transactionCost || 0);
+            }, 0);
+            const refNumber = transactions[0]?.referenceNumber || 'transaction';
+            const tradeWord = ledgerTxs.length === 1 ? 'trade' : 'trades';
+            const remarks = `Trades for ref: ${refNumber} (${ledgerTxs.length} ${tradeWord})`;
+
             await LedgerEntry.create([{
-                dematAccountId: result[0].dematAccountId,
-                transactionAmount: -totalTransactionCost,
-                remarks: remarks,
-                date: result[0].date
+                dematAccountId: ledgerTxs[0].dematAccountId,
+                tradeTransactionIds: ledgerTxs.map(t => t._id),
+                transactionAmount: bundleAmount,
+                remarks,
+                date: ledgerTxs[0].date
             }], { session });
         }
 
@@ -307,42 +289,57 @@ const deleteTransaction = async (transactionId) => {
             throw error;
         }
 
+        // Resolve which transactions get removed in this call. Intraday SELL is
+        // not deletable directly; deleting the BUY removes its paired SELL too.
+        let txsToDelete;
         if (transaction.deliveryType === 'Intraday') {
-            // For Intraday transactions, only allow deletion through the BUY transaction
             if (transaction.type === 'SELL') {
                 const error = new Error('Cannot delete SELL intraday transaction directly. Delete the corresponding BUY transaction instead.');
                 error.statusCode = 405;
                 error.reasonCode = 'NOT_ALLOWED';
                 throw error;
             }
-
-            // Find and delete the corresponding SELL transaction
-            const sellTransaction = await Transaction.findOne({
-                buyTransactionId: transaction._id
-            }).session(session);
-
-            if (sellTransaction) {
-                // Delete both transactions
-                await Transaction.deleteMany({
-                    _id: { $in: [transaction._id, sellTransaction._id] }
-                }).session(session);
-                
-                // Delete corresponding ledger entries
-                await LedgerEntry.deleteMany({
-                    tradeTransactionId: { $in: [transaction._id, sellTransaction._id] }
-                }).session(session);
-            }
+            const sellTransaction = await Transaction.findOne({ buyTransactionId: transaction._id }).session(session);
+            txsToDelete = sellTransaction ? [transaction, sellTransaction] : [transaction];
         } else {
-            // For Delivery type, just delete the single transaction
-            await Transaction.deleteOne({ _id: transactionId }).session(session);
-            
-            await LedgerEntry.deleteMany({
-                tradeTransactionId: transaction._id
-            }).session(session);
+            txsToDelete = [transaction];
         }
 
-        // Update records after deletion
-        
+        const txIdsToDelete = txsToDelete.map(t => t._id);
+
+        // Find every bundled ledger entry that references any of these txs and
+        // either unlink the txs (recomputing transactionAmount) or delete the
+        // whole bundle when its tradeTransactionIds becomes empty.
+        const bundles = await LedgerEntry.find({
+            tradeTransactionIds: { $in: txIdsToDelete }
+        }).session(session);
+
+        for (const bundle of bundles) {
+            const txsInThisBundle = txsToDelete.filter(t =>
+                bundle.tradeTransactionIds.some(id => id.equals(t._id))
+            );
+            const delta = txsInThisBundle.reduce((sum, t) => {
+                const signed = (t.type === 'BUY' ? -1 : 1) * t.quantity * t.price;
+                return sum + signed - (t.transactionCost || 0);
+            }, 0);
+            const remainingIds = bundle.tradeTransactionIds.filter(id =>
+                !txsInThisBundle.some(t => t._id.equals(id))
+            );
+
+            if (remainingIds.length === 0) {
+                await LedgerEntry.deleteOne({ _id: bundle._id }).session(session);
+            } else {
+                bundle.tradeTransactionIds = remainingIds;
+                bundle.transactionAmount = bundle.transactionAmount - delta;
+                const refNumber = txsInThisBundle[0]?.referenceNumber || 'transaction';
+                const tradeWord = remainingIds.length === 1 ? 'trade' : 'trades';
+                bundle.remarks = `Trades for ref: ${refNumber} (${remainingIds.length} ${tradeWord})`;
+                await bundle.save({ session });
+            }
+        }
+
+        await Transaction.deleteMany({ _id: { $in: txIdsToDelete } }).session(session);
+
         await updateRecords(transaction.date, transaction.dematAccountId, session);
     });
 }
