@@ -10,11 +10,12 @@ const getLedgerEntries = async (req, res, next) => {
       dematAccountId: req.params.dematAccountId,
       transactionType: req.query.transactionType,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
-      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1,
+      sortDirection: 'asc'
     };
-    
+
     const result = await ledgerService.getLedgerEntries(filters);
-    
+
     return ApiResponse.success(res, result, 'Ledger entries retrieved successfully');
   } catch (error) {
     next(error);

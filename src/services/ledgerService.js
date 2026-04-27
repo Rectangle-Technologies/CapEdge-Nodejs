@@ -14,7 +14,8 @@ const { updateRecords } = require('./recordService');
  * @returns {Promise<Object>} - { entries, pagination }
  */
 const getLedgerEntries = async (filters = {}) => {
-  const { startDate, endDate, dematAccountId, transactionType, limit = 50, pageNo = 1 } = filters;
+  const { startDate, endDate, dematAccountId, transactionType, limit = 50, pageNo = 1, sortDirection = 'desc' } = filters;
+  const sortOrder = sortDirection === 'asc' ? 1 : -1;
 
   // Build match query
   const matchQuery = {};
@@ -104,9 +105,10 @@ const getLedgerEntries = async (filters = {}) => {
     pipeline.push({ $match: { type: transactionType } });
   }
 
-  // Sort by date (newest to oldest)
+  // Sort by date in the requested direction (default newest -> oldest;
+  // UI listing passes 'asc' for chronological order).
   pipeline.push({
-    $sort: { date: -1, createdAt: -1 }
+    $sort: { date: sortOrder, createdAt: sortOrder }
   });
 
   // Project final fields
@@ -133,8 +135,26 @@ const getLedgerEntries = async (filters = {}) => {
   // Execute aggregation
   const entries = await LedgerEntry.aggregate(pipeline);
 
+  // Opening balance = running balance as of startDate, computed as the sum of
+  // transactionAmount across all entries for this demat account dated strictly
+  // before startDate. Robust against entries with null balanceAfterEntry.
+  let openingBalance = 0;
+  if (startDate) {
+    const openingAgg = await LedgerEntry.aggregate([
+      {
+        $match: {
+          dematAccountId: dematAccount._id,
+          date: { $lt: new Date(startDate) }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$transactionAmount' } } }
+    ]);
+    openingBalance = openingAgg[0]?.total || 0;
+  }
+
   return {
     entries,
+    openingBalance,
     pagination: {
       total,
       count: entries.length,
