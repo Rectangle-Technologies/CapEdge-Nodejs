@@ -34,6 +34,25 @@ const createTransactions = async (req, res, next) => {
   }
 };
 
+const getContracts = async (req, res, next) => {
+  try {
+    const filters = {
+      dematAccountId: req.query.dematAccountId,
+      securityId: req.query.securityId,
+      financialYearId: req.query.financialYearId,
+      referenceNumber: req.query.referenceNumber,
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
+    };
+
+    const result = await transactionService.getContracts(filters);
+
+    return ApiResponse.success(res, result, 'Contracts retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deleteTransaction = async (req, res, next) => {
   try {
     await transactionService.deleteTransaction(req.params.id);
@@ -46,6 +65,7 @@ const deleteTransaction = async (req, res, next) => {
 
 module.exports = {
   getTransactions,
+  getContracts,
   createTransactions,
   deleteTransaction
 };

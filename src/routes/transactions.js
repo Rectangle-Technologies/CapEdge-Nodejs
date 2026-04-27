@@ -154,8 +154,38 @@ const queryValidation = [
     .withMessage(`Delivery type must be one of: ${deliveryTypes.join(', ')}`)
 ];
 
+const contractsQueryValidation = [
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  query('pageNo')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page number must be a positive integer'),
+  query('securityId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid security ID'),
+  query('dematAccountId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid demat account ID'),
+  query('financialYearId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid financial year ID'),
+  query('referenceNumber')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Reference number filter too long')
+];
+
 // Routes
 router.get('/get-all', queryValidation, handleValidationErrors, transactionController.getTransactions);
+router.get('/get-contracts', contractsQueryValidation, handleValidationErrors, transactionController.getContracts);
 router.post('/create', transactionValidation, handleValidationErrors, transactionController.createTransactions);
 router.delete('/delete/:id', idValidation, handleValidationErrors, transactionController.deleteTransaction);
 

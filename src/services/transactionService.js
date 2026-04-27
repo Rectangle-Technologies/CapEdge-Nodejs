@@ -344,8 +344,138 @@ const deleteTransaction = async (transactionId) => {
     });
 }
 
+const getContracts = async (filters = {}) => {
+    const { dematAccountId, securityId, financialYearId, referenceNumber, limit = 50, pageNo = 1 } = filters;
+
+    const baseMatch = {
+        isIpo: { $ne: true },
+        referenceNumber: { $exists: true, $nin: [null, ''] }
+    };
+    if (financialYearId) baseMatch.financialYearId = new mongoose.Types.ObjectId(financialYearId);
+    if (dematAccountId) baseMatch.dematAccountId = new mongoose.Types.ObjectId(dematAccountId);
+    if (referenceNumber) baseMatch.referenceNumber = { $regex: referenceNumber, $options: 'i' };
+
+    // Stage 1: find candidate referenceNumbers, optionally filtered by securityId,
+    // grouped per (referenceNumber, dematAccountId) so a ref reused across demat
+    // accounts stays separated.
+    const candidateMatch = { ...baseMatch };
+    if (securityId) candidateMatch.securityId = new mongoose.Types.ObjectId(securityId);
+
+    const parsedLimit = parseInt(limit, 10) || 50;
+    const parsedPage = Math.max(1, parseInt(pageNo, 10) || 1);
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    const facet = await Transaction.aggregate([
+        { $match: candidateMatch },
+        {
+            $group: {
+                _id: { referenceNumber: '$referenceNumber', dematAccountId: '$dematAccountId' },
+                latestDate: { $max: '$date' }
+            }
+        },
+        {
+            $facet: {
+                page: [
+                    { $sort: { latestDate: -1, '_id.referenceNumber': 1 } },
+                    { $skip: skip },
+                    { $limit: parsedLimit }
+                ],
+                totalCount: [{ $count: 'total' }]
+            }
+        }
+    ]);
+
+    const pageGroups = facet[0]?.page || [];
+    const total = facet[0]?.totalCount?.[0]?.total || 0;
+
+    if (pageGroups.length === 0) {
+        return {
+            contracts: [],
+            pagination: { total, count: 0, limit: parsedLimit, pageNo: parsedPage }
+        };
+    }
+
+    // Stage 2: re-fetch every trade for the paginated (refNumber, dematAccount)
+    // pairs without the securityId filter, so contracts surface their full trade
+    // list even when a security filter narrowed the candidate scan.
+    const refNumbers = [...new Set(pageGroups.map((g) => g._id.referenceNumber))];
+    const dematIds = [...new Set(pageGroups.map((g) => String(g._id.dematAccountId)))];
+
+    const tradesMatch = { ...baseMatch };
+    tradesMatch.referenceNumber = { $in: refNumbers };
+    tradesMatch.dematAccountId = { $in: dematIds.map((id) => new mongoose.Types.ObjectId(id)) };
+
+    const trades = await Transaction.find(tradesMatch)
+        .sort({ date: 1, createdAt: 1 })
+        .populate('securityId')
+        .populate({ path: 'dematAccountId', populate: { path: 'brokerId' } })
+        .lean();
+
+    // Group trades back into contracts keyed by (referenceNumber, dematAccountId)
+    const contractsMap = new Map();
+    for (const trade of trades) {
+        const key = `${trade.referenceNumber}::${trade.dematAccountId?._id || trade.dematAccountId}`;
+        if (!contractsMap.has(key)) {
+            contractsMap.set(key, {
+                referenceNumber: trade.referenceNumber,
+                dematAccountId: trade.dematAccountId,
+                trades: [],
+                netBuyAmount: 0,
+                netSellAmount: 0,
+                totalCost: 0,
+                securityIds: new Set()
+            });
+        }
+        const contract = contractsMap.get(key);
+        contract.trades.push(trade);
+
+        const amount = (trade.quantity || 0) * (trade.price || 0);
+        const cost = trade.transactionCost || 0;
+        if (trade.type === 'BUY') {
+            contract.netBuyAmount += amount;
+        } else if (trade.type === 'SELL') {
+            contract.netSellAmount += amount;
+        }
+        contract.totalCost += cost;
+        if (trade.securityId?._id) contract.securityIds.add(String(trade.securityId._id));
+    }
+
+    // Order the response to match the paginated facet ordering.
+    const contracts = pageGroups
+        .map((g) => {
+            const key = `${g._id.referenceNumber}::${g._id.dematAccountId}`;
+            const contract = contractsMap.get(key);
+            if (!contract) return null;
+            const dates = contract.trades.map((t) => t.date).filter(Boolean);
+            const latestDate = dates.length ? new Date(Math.max(...dates.map((d) => new Date(d).getTime()))) : null;
+            return {
+                referenceNumber: contract.referenceNumber,
+                date: latestDate,
+                dematAccountId: contract.dematAccountId,
+                totalTrades: contract.trades.length,
+                securityCount: contract.securityIds.size,
+                netBuyAmount: contract.netBuyAmount,
+                netSellAmount: contract.netSellAmount,
+                totalCost: contract.totalCost,
+                trades: contract.trades
+            };
+        })
+        .filter(Boolean);
+
+    return {
+        contracts,
+        pagination: {
+            total,
+            count: contracts.length,
+            limit: parsedLimit,
+            pageNo: parsedPage
+        }
+    };
+};
+
 module.exports = {
     createTransactions,
     getTransactions,
+    getContracts,
     deleteTransaction
 };
