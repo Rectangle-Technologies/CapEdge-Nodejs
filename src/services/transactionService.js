@@ -376,7 +376,7 @@ const getContracts = async (filters = {}) => {
         {
             $facet: {
                 page: [
-                    { $sort: { latestDate: -1, '_id.referenceNumber': 1 } },
+                    { $sort: { latestDate: 1, '_id.referenceNumber': 1 } },
                     { $skip: skip },
                     { $limit: parsedLimit }
                 ],
