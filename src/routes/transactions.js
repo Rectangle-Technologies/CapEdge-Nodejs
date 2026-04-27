@@ -17,7 +17,10 @@ const transactionValidation = [
     .isISO8601()
     .withMessage('Invalid date format')
     .custom((value) => {
-      if (new Date(value) > new Date()) {
+      const inputDate = new Date(value);
+      inputDate.setHours(0, 0, 0, 0);
+      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      if (inputDate > today) {
         throw new Error('Transaction date cannot be in the future');
       }
       return true;
