@@ -192,4 +192,64 @@ router.get('/get-contracts', contractsQueryValidation, handleValidationErrors, t
 router.post('/create', transactionValidation, handleValidationErrors, transactionController.createTransactions);
 router.delete('/delete/:id', idValidation, handleValidationErrors, transactionController.deleteTransaction);
 
+const editTransactionValidation = [
+  body('date')
+    .notEmpty().withMessage('Transaction date is required')
+    .isISO8601().withMessage('Invalid date format')
+    .custom((value) => {
+      const inputDate = new Date(value);
+      inputDate.setHours(0, 0, 0, 0);
+      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      if (inputDate > today) throw new Error('Transaction date cannot be in the future');
+      return true;
+    }),
+  body('type').custom((value, { req }) => {
+    if (req.body.deliveryType === 'Delivery' && !value)
+      throw new Error('Type is required for Delivery type transactions');
+    return true;
+  }),
+  body('quantity')
+    .notEmpty().withMessage('Quantity is required')
+    .isFloat({ min: 0.000001 }).withMessage('Quantity must be a positive number'),
+  body('price').custom((value, { req }) => {
+    if (req.body.deliveryType === 'Delivery') {
+      if (value === undefined || value === null || value === '')
+        throw new Error('Price is required for Delivery type transactions');
+      if (typeof value !== 'number' || value < 0)
+        throw new Error('Price must be 0 or greater');
+    }
+    return true;
+  }),
+  body('buyPrice').custom((value, { req }) => {
+    if (req.body.deliveryType === 'Intraday') {
+      if (!value) throw new Error('Buy price is required for Intraday type transactions');
+      if (typeof value !== 'number' || value <= 0)
+        throw new Error('Buy price must be greater than 0');
+    }
+    return true;
+  }),
+  body('sellPrice').custom((value, { req }) => {
+    if (req.body.deliveryType === 'Intraday') {
+      if (!value) throw new Error('Sell price is required for Intraday type transactions');
+      if (typeof value !== 'number' || value <= 0)
+        throw new Error('Sell price must be greater than 0');
+    }
+    return true;
+  }),
+  body('securityId')
+    .notEmpty().withMessage('Security ID is required')
+    .isMongoId().withMessage('Invalid security ID'),
+  body('deliveryType')
+    .notEmpty().withMessage('Delivery type is required')
+    .isIn(deliveryTypes).withMessage(`Delivery type must be one of: ${deliveryTypes.join(', ')}`),
+  body('dematAccountId')
+    .notEmpty().withMessage('Demat account ID is required')
+    .isMongoId().withMessage('Invalid demat account ID'),
+  body('referenceNumber')
+    .notEmpty().withMessage('Reference number is required')
+    .trim()
+];
+
+router.put('/edit/:id', idValidation, editTransactionValidation, handleValidationErrors, transactionController.editTransaction);
+
 module.exports = router;

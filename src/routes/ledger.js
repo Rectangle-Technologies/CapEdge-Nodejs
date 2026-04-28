@@ -64,5 +64,9 @@ router.post('/add', addLedgerEntryValidation, handleValidationErrors, ledgerCont
 router.delete('/:id', [param('id').isMongoId().withMessage('Invalid ledger entry ID')], handleValidationErrors, ledgerController.deleteLedgerEntry);
 router.get('/export', queryValidation, handleValidationErrors, ledgerController.exportLedger);
 router.post('/fix', ledgerController.fixLedgerEntries);
+router.put('/edit/:id', [
+  param('id').isMongoId().withMessage('Invalid ledger entry ID'),
+  ...addLedgerEntryValidation
+], handleValidationErrors, ledgerController.editLedgerEntry);
 
 module.exports = router;

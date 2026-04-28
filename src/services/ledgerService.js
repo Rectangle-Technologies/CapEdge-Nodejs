@@ -277,9 +277,76 @@ const deleteLedgerEntry = async (entryId) => {
   }
 };
 
+const editLedgerEntry = async (entryId, data) => {
+  const entry = await LedgerEntry.findById(entryId);
+  if (!entry) {
+    const error = new Error('Ledger entry not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  if (entry.tradeTransactionIds && entry.tradeTransactionIds.length > 0) {
+    const error = new Error('Cannot edit a trade-linked ledger entry. Edit the associated transaction instead.');
+    error.statusCode = 400;
+    error.reasonCode = 'TRADE_LINKED';
+    throw error;
+  }
+
+  const { dematAccountId, transactionAmount, date, remarks } = data;
+
+  const dematAccount = await DematAccount.findById(dematAccountId);
+  if (!dematAccount) {
+    const error = new Error('Demat account not found');
+    error.statusCode = 404;
+    error.reasonCode = 'NOT_FOUND';
+    throw error;
+  }
+
+  const oldDate = entry.date;
+  const newDate = new Date(date);
+
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction({
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+      readPreference: 'primary'
+    });
+
+    // Remove old entry and recalculate from the old date.
+    await LedgerEntry.deleteOne({ _id: entryId }).session(session);
+    await updateRecords(oldDate, dematAccountId, session);
+
+    // Create replacement entry and recalculate from the new date.
+    const newEntry = await LedgerEntry.create([{
+      dematAccountId,
+      transactionAmount,
+      date: newDate,
+      remarks
+    }], { session });
+
+    await updateRecords(newDate, dematAccountId, session);
+
+    const updatedDematAccount = await DematAccount.findById(dematAccountId).session(session);
+    const latestBalance = updatedDematAccount ? updatedDematAccount.balance : null;
+
+    await session.commitTransaction();
+
+    return { ledgerEntry: newEntry[0], latestBalance };
+  } catch (error) {
+    console.error('Error in editLedgerEntry:', error);
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
 module.exports = {
   getLedgerEntries,
   addLedgerEntry,
   deleteLedgerEntry,
+  editLedgerEntry,
   fixLedgerEntries
 };

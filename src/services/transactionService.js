@@ -278,71 +278,109 @@ const createTransactions = async (transactions) => {
     });
 };
 
-const deleteTransaction = async (transactionId) => {
-    // Execute with retry logic
-    return await executeTransactionWithRetry(async (session) => {
-        const transaction = await Transaction.findById(transactionId).session(session);
-        if (!transaction) {
-            const error = new Error('Transaction not found');
-            error.statusCode = 404;
-            error.reasonCode = 'NOT_FOUND';
+const _deleteTransactionLogic = async (transactionId, session) => {
+    const transaction = await Transaction.findById(transactionId).session(session);
+    if (!transaction) {
+        const error = new Error('Transaction not found');
+        error.statusCode = 404;
+        error.reasonCode = 'NOT_FOUND';
+        throw error;
+    }
+
+    // Resolve which transactions get removed in this call. Intraday SELL is
+    // not deletable directly; deleting the BUY removes its paired SELL too.
+    let txsToDelete;
+    if (transaction.deliveryType === 'Intraday') {
+        if (transaction.type === 'SELL') {
+            const error = new Error('Cannot delete SELL intraday transaction directly. Delete the corresponding BUY transaction instead.');
+            error.statusCode = 405;
+            error.reasonCode = 'NOT_ALLOWED';
             throw error;
         }
+        const sellTransaction = await Transaction.findOne({ buyTransactionId: transaction._id }).session(session);
+        txsToDelete = sellTransaction ? [transaction, sellTransaction] : [transaction];
+    } else {
+        txsToDelete = [transaction];
+    }
 
-        // Resolve which transactions get removed in this call. Intraday SELL is
-        // not deletable directly; deleting the BUY removes its paired SELL too.
-        let txsToDelete;
-        if (transaction.deliveryType === 'Intraday') {
-            if (transaction.type === 'SELL') {
-                const error = new Error('Cannot delete SELL intraday transaction directly. Delete the corresponding BUY transaction instead.');
-                error.statusCode = 405;
-                error.reasonCode = 'NOT_ALLOWED';
-                throw error;
-            }
-            const sellTransaction = await Transaction.findOne({ buyTransactionId: transaction._id }).session(session);
-            txsToDelete = sellTransaction ? [transaction, sellTransaction] : [transaction];
+    const txIdsToDelete = txsToDelete.map(t => t._id);
+
+    // Find every bundled ledger entry that references any of these txs and
+    // either unlink the txs (recomputing transactionAmount) or delete the
+    // whole bundle when its tradeTransactionIds becomes empty.
+    const bundles = await LedgerEntry.find({
+        tradeTransactionIds: { $in: txIdsToDelete }
+    }).session(session);
+
+    for (const bundle of bundles) {
+        const txsInThisBundle = txsToDelete.filter(t =>
+            bundle.tradeTransactionIds.some(id => id.equals(t._id))
+        );
+        const delta = txsInThisBundle.reduce((sum, t) => {
+            const signed = (t.type === 'BUY' ? -1 : 1) * t.quantity * t.price;
+            return sum + signed - (t.transactionCost || 0);
+        }, 0);
+        const remainingIds = bundle.tradeTransactionIds.filter(id =>
+            !txsInThisBundle.some(t => t._id.equals(id))
+        );
+
+        if (remainingIds.length === 0) {
+            await LedgerEntry.deleteOne({ _id: bundle._id }).session(session);
         } else {
-            txsToDelete = [transaction];
+            bundle.tradeTransactionIds = remainingIds;
+            bundle.transactionAmount = bundle.transactionAmount - delta;
+            const refNumber = txsInThisBundle[0]?.referenceNumber || 'transaction';
+            const tradeWord = remainingIds.length === 1 ? 'trade' : 'trades';
+            bundle.remarks = `Trades for ref: ${refNumber} (${remainingIds.length} ${tradeWord})`;
+            await bundle.save({ session });
         }
+    }
 
-        const txIdsToDelete = txsToDelete.map(t => t._id);
+    await Transaction.deleteMany({ _id: { $in: txIdsToDelete } }).session(session);
 
-        // Find every bundled ledger entry that references any of these txs and
-        // either unlink the txs (recomputing transactionAmount) or delete the
-        // whole bundle when its tradeTransactionIds becomes empty.
-        const bundles = await LedgerEntry.find({
-            tradeTransactionIds: { $in: txIdsToDelete }
-        }).session(session);
+    await updateRecords(transaction.date, transaction.dematAccountId, session);
+};
 
-        for (const bundle of bundles) {
-            const txsInThisBundle = txsToDelete.filter(t =>
-                bundle.tradeTransactionIds.some(id => id.equals(t._id))
-            );
-            const delta = txsInThisBundle.reduce((sum, t) => {
-                const signed = (t.type === 'BUY' ? -1 : 1) * t.quantity * t.price;
-                return sum + signed - (t.transactionCost || 0);
-            }, 0);
-            const remainingIds = bundle.tradeTransactionIds.filter(id =>
-                !txsInThisBundle.some(t => t._id.equals(id))
-            );
-
-            if (remainingIds.length === 0) {
-                await LedgerEntry.deleteOne({ _id: bundle._id }).session(session);
-            } else {
-                bundle.tradeTransactionIds = remainingIds;
-                bundle.transactionAmount = bundle.transactionAmount - delta;
-                const refNumber = txsInThisBundle[0]?.referenceNumber || 'transaction';
-                const tradeWord = remainingIds.length === 1 ? 'trade' : 'trades';
-                bundle.remarks = `Trades for ref: ${refNumber} (${remainingIds.length} ${tradeWord})`;
-                await bundle.save({ session });
-            }
-        }
-
-        await Transaction.deleteMany({ _id: { $in: txIdsToDelete } }).session(session);
-
-        await updateRecords(transaction.date, transaction.dematAccountId, session);
+const deleteTransaction = async (transactionId) => {
+    return await executeTransactionWithRetry(async (session) => {
+        await _deleteTransactionLogic(transactionId, session);
     });
-}
+};
+
+const editTransaction = async (transactionId, newTransactionData) => {
+    return await executeTransactionWithRetry(async (session) => {
+        // Step 1: Delete the old transaction record(s), unlink its ledger entry,
+        // and recalculate holdings/balances from the old date.
+        await _deleteTransactionLogic(transactionId, session);
+
+        // Step 2: Create the new transaction record(s) with the updated data.
+        const newTxs = await createTransaction(newTransactionData, session);
+
+        // Step 3: Create a bundled ledger entry for non-IPO trades (mirrors
+        // the logic in createTransactions).
+        const ledgerTxs = newTxs.filter(tx => !tx.isIpo);
+        if (ledgerTxs.length > 0) {
+            const bundleAmount = ledgerTxs.reduce((sum, tx) => {
+                const signed = (tx.type === 'BUY' ? -1 : 1) * tx.quantity * tx.price;
+                return sum + signed - (tx.transactionCost || 0);
+            }, 0);
+            const refNumber = newTransactionData.referenceNumber || 'transaction';
+            const tradeWord = ledgerTxs.length === 1 ? 'trade' : 'trades';
+            const remarks = `Trades for ref: ${refNumber} (${ledgerTxs.length} ${tradeWord})`;
+            await LedgerEntry.create([{
+                dematAccountId: ledgerTxs[0].dematAccountId,
+                tradeTransactionIds: ledgerTxs.map(t => t._id),
+                transactionAmount: bundleAmount,
+                remarks,
+                date: ledgerTxs[0].date
+            }], { session });
+        }
+
+        // Step 4: Recalculate holdings and balances from the new transaction date.
+        await updateRecords(newTxs[0].date, newTxs[0].dematAccountId, session);
+        return newTxs;
+    });
+};
 
 const getContracts = async (filters = {}) => {
     const { dematAccountId, securityId, financialYearId, referenceNumber, limit = 50, pageNo = 1 } = filters;
@@ -477,5 +515,6 @@ module.exports = {
     createTransactions,
     getTransactions,
     getContracts,
-    deleteTransaction
+    deleteTransaction,
+    editTransaction
 };
