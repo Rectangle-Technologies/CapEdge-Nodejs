@@ -49,13 +49,14 @@ const getHoldingsFromCollection = async (query, options) => {
       .lean(),
     Holdings.aggregate([
       { $match: aggMatch },
-      { $group: { _id: null, total: { $sum: { $multiply: ['$quantity', '$price'] } } } }
+      { $group: { _id: null, total: { $sum: { $multiply: ['$quantity', '$price'] } }, securities: { $addToSet: '$securityId' } } }
     ])
   ]);
 
   const totalHoldingValue = valueAgg.length > 0 ? valueAgg[0].total : 0;
+  const totalSecurities = valueAgg.length > 0 ? valueAgg[0].securities.length : 0;
 
-  return { holdings, total, totalHoldingValue };
+  return { holdings, total, totalHoldingValue, totalSecurities };
 };
 
 /**
@@ -112,6 +113,7 @@ const getHoldingsFromReport = async (financialYearId, query, options, dematAccou
 
   const total = allHoldings.length;
   const totalHoldingValue = allHoldings.reduce((sum, h) => sum + (h.quantity || 0) * (h.price || 0), 0);
+  const totalSecurities = new Set(allHoldings.map(h => h.securityId?.toString()).filter(Boolean)).size;
 
   // Sort by buyDate
   allHoldings.sort((a, b) => new Date(a.buyDate) - new Date(b.buyDate));
@@ -146,7 +148,7 @@ const getHoldingsFromReport = async (financialYearId, query, options, dematAccou
     financialYearId: { _id: financialYear._id, title: financialYear.title }
   }));
 
-  return { holdings: populatedHoldings, total, totalHoldingValue };
+  return { holdings: populatedHoldings, total, totalHoldingValue, totalSecurities };
 };
 
 /**
@@ -219,7 +221,7 @@ const getHoldings = async (filters = {}) => {
     }
   }
 
-  let holdings, total, totalHoldingValue;
+  let holdings, total, totalHoldingValue, totalSecurities;
 
   if (shouldFetchFromCollection) {
     // Fetch from Holdings collection (current behavior)
@@ -227,12 +229,14 @@ const getHoldings = async (filters = {}) => {
     holdings = result.holdings;
     total = result.total;
     totalHoldingValue = result.totalHoldingValue;
+    totalSecurities = result.totalSecurities;
   } else {
     // Fetch from FinancialYear report (historical data)
     const result = await getHoldingsFromReport(financialYearId, query, options, dematAccountIds);
     holdings = result.holdings;
     total = result.total;
     totalHoldingValue = result.totalHoldingValue;
+    totalSecurities = result.totalSecurities;
   }
 
   return {
@@ -243,7 +247,8 @@ const getHoldings = async (filters = {}) => {
       limit: limit ? parseInt(limit) : total,
       pageNo: parseInt(pageNo)
     },
-    totalHoldingValue
+    totalHoldingValue,
+    totalSecurities
   };
 };
 
