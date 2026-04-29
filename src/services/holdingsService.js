@@ -3,6 +3,7 @@ const FinancialYear = require('../models/FinancialYear');
 const Security = require('../models/Security');
 const DematAccount = require('../models/DematAccount');
 const Transaction = require('../models/Transaction');
+const mongoose = require('mongoose');
 
 /**
  * Holdings Service
@@ -18,19 +19,43 @@ const Transaction = require('../models/Transaction');
 const getHoldingsFromCollection = async (query, options) => {
   const total = await Holdings.countDocuments(query);
 
-  const holdings = await Holdings.find(query, null, options)
-    .populate('securityId')
-    .populate({
-      path: 'dematAccountId',
-      populate: {
-        path: 'brokerId'
-      }
-    })
-    .populate('transactionId')
-    .populate('financialYearId', 'title')
-    .lean();
+  // Build an aggregation-safe match by casting ObjectId string fields explicitly.
+  // Mongoose auto-casts in .find() but NOT in .aggregate(), so string IDs won't match.
+  const aggMatch = { ...query };
+  const toObjectId = (v) => (v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(v.toString()));
 
-  return { holdings, total };
+  if (aggMatch.dematAccountId) {
+    if (aggMatch.dematAccountId.$in) {
+      aggMatch.dematAccountId = { $in: aggMatch.dematAccountId.$in.map(toObjectId) };
+    } else {
+      aggMatch.dematAccountId = toObjectId(aggMatch.dematAccountId);
+    }
+  }
+  if (aggMatch.securityId) {
+    aggMatch.securityId = toObjectId(aggMatch.securityId);
+  }
+
+  const [holdings, valueAgg] = await Promise.all([
+    Holdings.find(query, null, options)
+      .populate('securityId')
+      .populate({
+        path: 'dematAccountId',
+        populate: {
+          path: 'brokerId'
+        }
+      })
+      .populate('transactionId')
+      .populate('financialYearId', 'title')
+      .lean(),
+    Holdings.aggregate([
+      { $match: aggMatch },
+      { $group: { _id: null, total: { $sum: { $multiply: ['$quantity', '$price'] } } } }
+    ])
+  ]);
+
+  const totalHoldingValue = valueAgg.length > 0 ? valueAgg[0].total : 0;
+
+  return { holdings, total, totalHoldingValue };
 };
 
 /**
@@ -86,6 +111,7 @@ const getHoldingsFromReport = async (financialYearId, query, options, dematAccou
   }
 
   const total = allHoldings.length;
+  const totalHoldingValue = allHoldings.reduce((sum, h) => sum + (h.quantity || 0) * (h.price || 0), 0);
 
   // Sort by buyDate
   allHoldings.sort((a, b) => new Date(a.buyDate) - new Date(b.buyDate));
@@ -120,7 +146,7 @@ const getHoldingsFromReport = async (financialYearId, query, options, dematAccou
     financialYearId: { _id: financialYear._id, title: financialYear.title }
   }));
 
-  return { holdings: populatedHoldings, total };
+  return { holdings: populatedHoldings, total, totalHoldingValue };
 };
 
 /**
@@ -193,18 +219,20 @@ const getHoldings = async (filters = {}) => {
     }
   }
 
-  let holdings, total;
+  let holdings, total, totalHoldingValue;
 
   if (shouldFetchFromCollection) {
     // Fetch from Holdings collection (current behavior)
     const result = await getHoldingsFromCollection(query, options);
     holdings = result.holdings;
     total = result.total;
+    totalHoldingValue = result.totalHoldingValue;
   } else {
     // Fetch from FinancialYear report (historical data)
     const result = await getHoldingsFromReport(financialYearId, query, options, dematAccountIds);
     holdings = result.holdings;
     total = result.total;
+    totalHoldingValue = result.totalHoldingValue;
   }
 
   return {
@@ -214,7 +242,8 @@ const getHoldings = async (filters = {}) => {
       count: holdings.length,
       limit: limit ? parseInt(limit) : total,
       pageNo: parseInt(pageNo)
-    }
+    },
+    totalHoldingValue
   };
 };
 
