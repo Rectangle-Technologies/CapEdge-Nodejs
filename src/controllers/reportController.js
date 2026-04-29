@@ -57,9 +57,9 @@ const exportHoldingsReport = async (req, res, next) => {
 
 const exportLedgerReport = async (req, res, next) => {
   try {
-    const result = await reportService.getLedgerRecords(req.params.dematAccountId, req.query);
+    const { entries, closingBalance } = await reportService.getLedgerRecords(req.params.dematAccountId, req.query);
     const buffer = await exportService.exportLedgerToExcel({
-      ledgerEntries: result, startDate: req.query.startDate, endDate: req.query.endDate
+      ledgerEntries: entries, closingBalance, startDate: req.query.startDate, endDate: req.query.endDate
     }, 'Ledger_Report.xlsx');
 
     res.setHeader('Content-Disposition', 'attachment; filename="Ledger_Report.xlsx"');

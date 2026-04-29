@@ -152,9 +152,23 @@ const getLedgerEntries = async (filters = {}) => {
     openingBalance = openingAgg[0]?.total || 0;
   }
 
+  // Closing balance = running balance as of endDate, computed as the sum of
+  // transactionAmount across all entries for this demat account dated up to
+  // and including endDate. When endDate is absent, sums all entries.
+  const closingMatch = { dematAccountId: dematAccount._id };
+  if (endDate) {
+    closingMatch.date = { $lte: new Date(endDate) };
+  }
+  const closingAgg = await LedgerEntry.aggregate([
+    { $match: closingMatch },
+    { $group: { _id: null, total: { $sum: '$transactionAmount' } } }
+  ]);
+  const closingBalance = closingAgg[0]?.total || 0;
+
   return {
     entries,
     openingBalance,
+    closingBalance,
     pagination: {
       total,
       count: entries.length,

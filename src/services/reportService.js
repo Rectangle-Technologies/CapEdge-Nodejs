@@ -512,7 +512,7 @@ const getLedgerRecords = async (dematAccountId, filters) => {
     }
   }
 
-  const result = await LedgerEntry.aggregate([
+  const entries = await LedgerEntry.aggregate([
     { $match: matchQuery },
     {
       $lookup: {
@@ -562,7 +562,20 @@ const getLedgerRecords = async (dematAccountId, filters) => {
     { $sort: { date: 1, createdAt: 1 } }
   ]);
 
-  return result;
+  // Closing balance = sum of transactionAmount for all entries on or before
+  // endDate for this demat account. Mirrors the calculation used by the
+  // ledger page API so the Excel export matches the on-screen figure.
+  const closingMatch = { dematAccountId: dematAccount._id };
+  if (endDate) {
+    closingMatch.date = { $lte: new Date(endDate) };
+  }
+  const closingAgg = await LedgerEntry.aggregate([
+    { $match: closingMatch },
+    { $group: { _id: null, total: { $sum: '$transactionAmount' } } }
+  ]);
+  const closingBalance = closingAgg[0]?.total || 0;
+
+  return { entries, closingBalance };
 }
 
 
