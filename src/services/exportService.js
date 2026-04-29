@@ -447,7 +447,7 @@ const exportHoldingsToExcel = async (data, sheetName) => {
 }
 
 const exportLedgerToExcel = async (data, sheetName) => {
-  const { startDate, endDate, ledgerEntries } = data;
+  const { startDate, endDate, ledgerEntries, closingBalance = 0 } = data;
   
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
@@ -551,6 +551,16 @@ const exportLedgerToExcel = async (data, sheetName) => {
   worksheet.getCell(`D${currentRow}`).border = { top: { style: 'thin' } };
   worksheet.getCell(`E${currentRow}`).border = { top: { style: 'thin' } };
   worksheet.getCell(`F${currentRow}`).border = { top: { style: 'thin' } };
+
+  // Closing balance row (running balance as of endDate, equals on-screen value)
+  currentRow++;
+  worksheet.mergeCells(`A${currentRow}:D${currentRow}`);
+  worksheet.getCell(`A${currentRow}`).value = `Closing Balance${endDate ? ` as of ${formatDate(endDate)}` : ''}`;
+  worksheet.getCell(`A${currentRow}`).font = { bold: true };
+  worksheet.getCell(`A${currentRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
+  worksheet.getCell(`E${currentRow}`).value = closingBalance;
+  worksheet.getCell(`E${currentRow}`).numFmt = inrFormat;
+  worksheet.getCell(`E${currentRow}`).font = { bold: true, color: { argb: closingBalance >= 0 ? 'FF008000' : 'FFFF0000' } };
 
   // Return buffer for download
   const buffer = await workbook.xlsx.writeBuffer();

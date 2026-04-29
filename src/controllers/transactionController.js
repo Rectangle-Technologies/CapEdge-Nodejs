@@ -63,9 +63,20 @@ const deleteTransaction = async (req, res, next) => {
   }
 };
 
+const editTransaction = async (req, res, next) => {
+  try {
+    const transactions = await transactionService.editTransaction(req.params.id, req.body);
+    return ApiResponse.success(res, { transactions }, 'Transaction updated successfully');
+  } catch (error) {
+    console.error('Error editing transaction:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getTransactions,
   getContracts,
   createTransactions,
-  deleteTransaction
+  deleteTransaction,
+  editTransaction
 };

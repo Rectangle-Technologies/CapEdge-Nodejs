@@ -87,10 +87,20 @@ const fixLedgerEntries = async (req, res, next) => {
   }
 }
 
+const editLedgerEntry = async (req, res, next) => {
+  try {
+    const result = await ledgerService.editLedgerEntry(req.params.id, req.body);
+    return ApiResponse.success(res, result, 'Ledger entry updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getLedgerEntries,
   addLedgerEntry,
   deleteLedgerEntry,
   exportLedger,
-  fixLedgerEntries
+  fixLedgerEntries,
+  editLedgerEntry
 };
