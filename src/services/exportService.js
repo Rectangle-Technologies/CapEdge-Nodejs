@@ -568,8 +568,115 @@ const exportLedgerToExcel = async (data, sheetName) => {
   return buffer;
 }
 
+const exportHoldingsSummaryToExcel = async (data, sheetName) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // INR Currency format
+  const inrFormat = '₹#,##0.00';
+
+  // Build dynamic columns based on number of demat accounts
+  const allDematAccounts = [];
+  data.forEach(security => {
+    security.dematAccounts.forEach(account => {
+      const key = `${account.userAccountName}-${account.brokerName}`;
+      if (!allDematAccounts.find(a => a.key === key)) {
+        allDematAccounts.push({
+          key,
+          label: account.accountLabel,
+          userAccountName: account.userAccountName,
+          brokerName: account.brokerName
+        });
+      }
+    });
+  });
+
+  // Sort accounts by userAccountName first, then by brokerName
+  allDematAccounts.sort((a, b) => {
+    const userCompare = a.userAccountName.localeCompare(b.userAccountName);
+    if (userCompare !== 0) return userCompare;
+    return a.brokerName.localeCompare(b.brokerName);
+  });
+
+  // Header row 1: Stock + Account labels (merged cells for each account, 3 cols: Qty, Price, Amount)
+  let currentCol = 2;
+  worksheet.getCell('A1').value = 'Stock';
+
+  allDematAccounts.forEach(account => {
+    const startCol = currentCol;
+    const endCol = currentCol + 2; // Quantity, Price, Amount = 3 columns
+    worksheet.mergeCells(1, startCol, 1, endCol);
+    worksheet.getCell(1, startCol).value = account.label;
+    currentCol = endCol + 1;
+  });
+
+  // Header row 2: Column names for each account (no Date)
+  currentCol = 2;
+  worksheet.getCell('A2').value = '';
+  allDematAccounts.forEach(() => {
+    worksheet.getCell(2, currentCol).value = 'Quantity';
+    worksheet.getCell(2, currentCol + 1).value = 'Avg Price';
+    worksheet.getCell(2, currentCol + 2).value = 'Amount';
+    currentCol += 3;
+  });
+
+  // Set column widths
+  worksheet.getColumn(1).width = 20; // Stock column
+  for (let col = 2; col <= 1 + (allDematAccounts.length * 3); col++) {
+    const colIndex = (col - 2) % 3;
+    if (colIndex === 0) worksheet.getColumn(col).width = 12;      // Quantity
+    else if (colIndex === 1) worksheet.getColumn(col).width = 15; // Avg Price
+    else worksheet.getColumn(col).width = 15;                     // Amount
+  }
+
+  // Populate data rows — one row per security
+  let currentRow = 3;
+  data.forEach(security => {
+    const holdingsMap = new Map();
+    security.dematAccounts.forEach(account => {
+      const key = `${account.userAccountName}-${account.brokerName}`;
+      holdingsMap.set(key, account);
+    });
+
+    worksheet.getCell(`A${currentRow}`).value = security.securityName;
+    worksheet.getCell(`A${currentRow}`).alignment = { vertical: 'middle' };
+
+    allDematAccounts.forEach((account, index) => {
+      const accountData = holdingsMap.get(account.key);
+      const accountCol = 2 + (index * 3);
+
+      if (accountData) {
+        worksheet.getCell(currentRow, accountCol).value = accountData.total.quantity;
+        worksheet.getCell(currentRow, accountCol + 1).value = accountData.total.price;
+        worksheet.getCell(currentRow, accountCol + 1).numFmt = inrFormat;
+        worksheet.getCell(currentRow, accountCol + 2).value = accountData.total.amount;
+        worksheet.getCell(currentRow, accountCol + 2).numFmt = inrFormat;
+      }
+    });
+
+    // Add bottom border to the row
+    for (let col = 1; col <= 1 + (allDematAccounts.length * 3); col++) {
+      const cell = worksheet.getCell(currentRow, col);
+      cell.border = { bottom: { style: 'thin' } };
+    }
+
+    currentRow++;
+  });
+
+  // Apply styling to header rows
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(2).font = { bold: true };
+  worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(2).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  console.log(`Holdings Summary Excel buffer generated for download.`);
+  return buffer;
+};
+
 module.exports = {
   exportPnlToExcel,
   exportHoldingsToExcel,
+  exportHoldingsSummaryToExcel,
   exportLedgerToExcel
 };

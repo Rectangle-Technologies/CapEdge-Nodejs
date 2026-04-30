@@ -55,6 +55,22 @@ const exportHoldingsReport = async (req, res, next) => {
   }
 };
 
+const exportHoldingsSummaryReport = async (req, res, next) => {
+  try {
+    const { financialYearId } = req.query;
+
+    const result = await reportService.getHoldingsRecords(financialYearId);
+    const buffer = await exportService.exportHoldingsSummaryToExcel(result, 'Holdings_Summary.xlsx');
+
+    res.setHeader('Content-Disposition', 'attachment; filename="Holdings_Summary.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    return res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const exportLedgerReport = async (req, res, next) => {
   try {
     const { entries, closingBalance } = await reportService.getLedgerRecords(req.params.dematAccountId, req.query);
@@ -75,5 +91,6 @@ module.exports = {
   getPnLData,
   exportPnLReport,
   exportHoldingsReport,
+  exportHoldingsSummaryReport,
   exportLedgerReport
 };
