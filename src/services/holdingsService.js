@@ -306,7 +306,8 @@ const getHoldingsForSplit = async (securityId, splitDate) => {
 
   return {
     securityName: security.name,
-    holdings: response
+    holdings: response,
+    splitHistory: security.splitHistory
   };
 }
 
