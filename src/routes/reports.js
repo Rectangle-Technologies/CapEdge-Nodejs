@@ -32,6 +32,7 @@ router.post('/pnl/export', pnlValidation, handleValidationErrors, validateFinanc
 
 // All holdings Report Routes
 router.get('/holdings/export', validateFinancialYearAccess, reportController.exportHoldingsReport);
+router.get('/holdings/export/summary', validateFinancialYearAccess, reportController.exportHoldingsSummaryReport);
 
 // Ledger
 router.get('/ledger/export/:dematAccountId', ledgerQueryValidation, handleValidationErrors, reportController.exportLedgerReport);
