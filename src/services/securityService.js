@@ -311,14 +311,14 @@ const processSplit = async (payload) => {
         // Save all changes
         var oldTrnSave = transactionResult.save({ session });
         var newTrnSave = newTransaction.save({ session });
-        var [_, newTrxn, _] = await Promise.all([oldTrnSave, newTrnSave]);
+        var [_oldTrn, newTrxn] = await Promise.all([oldTrnSave, newTrnSave]);
 
         // Link new transaction to holding
         txData.transactionId = newTrxn._id;
         holdingResult.transactionId = newTrxn._id;
-        var holdingResultSave = holdingResult.save({ session });
+        await holdingResult.save({ session });
       } else if (holdingResult.quantity > txData.quantityBeforeSplit) {
-        const error = new Error(`Holding quantity less than quantity before split for holding: ${txData.holdingId}`);
+        const error = new Error(`Holding quantity mismatch for holding: ${txData.holdingId}`);
         error.statusCode = 400;
         throw error;
       } else {
@@ -334,12 +334,16 @@ const processSplit = async (payload) => {
       }
     }
 
-    // Add split record to security
-    security.splitHistory.push({
-      splitDate,
-      splitRatio,
-      transactions
-    });
+    // Add or merge split record into security history
+    const existingSplitEntry = security.splitHistory.find(
+      s => s.splitRatio === splitRatio &&
+           new Date(s.splitDate).toISOString().split('T')[0] === new Date(splitDate).toISOString().split('T')[0]
+    );
+    if (existingSplitEntry) {
+      existingSplitEntry.transactions.push(...transactions);
+    } else {
+      security.splitHistory.push({ splitDate, splitRatio, transactions });
+    }
 
     await security.save({ session });
 
