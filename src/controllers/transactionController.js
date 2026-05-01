@@ -41,6 +41,7 @@ const getContracts = async (req, res, next) => {
       securityId: req.query.securityId,
       financialYearId: req.query.financialYearId,
       referenceNumber: req.query.referenceNumber,
+      date: req.query.date,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,
       pageNo: req.query.pageNo ? parseInt(req.query.pageNo) : 1
     };
