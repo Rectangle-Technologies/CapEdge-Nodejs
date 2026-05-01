@@ -383,7 +383,7 @@ const editTransaction = async (transactionId, newTransactionData) => {
 };
 
 const getContracts = async (filters = {}) => {
-    const { dematAccountId, securityId, financialYearId, referenceNumber, limit = 50, pageNo = 1 } = filters;
+    const { dematAccountId, securityId, financialYearId, referenceNumber, date, limit = 50, pageNo = 1 } = filters;
 
     const baseMatch = {
         isIpo: { $ne: true },
@@ -392,6 +392,13 @@ const getContracts = async (filters = {}) => {
     if (financialYearId) baseMatch.financialYearId = new mongoose.Types.ObjectId(financialYearId);
     if (dematAccountId) baseMatch.dematAccountId = new mongoose.Types.ObjectId(dematAccountId);
     if (referenceNumber) baseMatch.referenceNumber = { $regex: referenceNumber, $options: 'i' };
+    if (date) {
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+        baseMatch.date = { $gte: start, $lte: end };
+    }
 
     // Stage 1: find candidate referenceNumbers, optionally filtered by securityId,
     // grouped per (referenceNumber, dematAccountId) so a ref reused across demat

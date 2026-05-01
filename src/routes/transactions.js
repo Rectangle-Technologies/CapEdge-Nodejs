@@ -183,7 +183,11 @@ const contractsQueryValidation = [
     .isString()
     .trim()
     .isLength({ max: 100 })
-    .withMessage('Reference number filter too long')
+    .withMessage('Reference number filter too long'),
+  query('date')
+    .optional()
+    .isDate({ format: 'YYYY-MM-DD' })
+    .withMessage('Date must be in YYYY-MM-DD format')
 ];
 
 // Routes
