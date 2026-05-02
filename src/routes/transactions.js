@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param, query } = require('express-validator');
 const transactionController = require('../controllers/transactionController');
 const { handleValidationErrors } = require('../middleware/validation');
+const contractUpload = require('../middleware/contractUpload');
 
 const router = express.Router();
 
@@ -255,5 +256,9 @@ const editTransactionValidation = [
 ];
 
 router.put('/edit/:id', idValidation, editTransactionValidation, handleValidationErrors, transactionController.editTransaction);
+
+// Contract upload (PDF → parsed lines → user pre-fills AddTransaction form
+// → saves via existing POST /transaction/create)
+router.post('/upload-contract', contractUpload.single('file'), transactionController.uploadContract);
 
 module.exports = router;

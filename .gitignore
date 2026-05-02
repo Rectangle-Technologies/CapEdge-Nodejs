@@ -144,3 +144,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Contract upload artifacts (may contain personal data — PAN, addresses, trades)
+uploads/
