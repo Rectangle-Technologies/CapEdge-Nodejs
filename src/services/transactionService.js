@@ -617,11 +617,53 @@ const getContracts = async (filters = {}) => {
     };
 };
 
+/**
+ * Deletes all transactions belonging to a contract (identified by referenceNumber +
+ * dematAccountId) atomically within a single Mongoose session.
+ *
+ * Mirrors editContract's delete phase: only processes BUY/Delivery transactions
+ * directly — Intraday SELL records are removed automatically as paired records
+ * when their corresponding BUY is deleted.
+ * Calls updateRecords() exactly once after all deletes.
+ *
+ * @param {string} referenceNumber - The contract's reference number
+ * @param {string} dematAccountId  - The demat account ObjectId string
+ */
+const deleteContract = async (referenceNumber, dematAccountId) => {
+    return await executeTransactionWithRetry(async (session) => {
+        const existingTxs = await Transaction.find({
+            referenceNumber,
+            dematAccountId: new mongoose.Types.ObjectId(dematAccountId)
+        }).session(session);
+
+        if (existingTxs.length === 0) {
+            const error = new Error('Contract not found');
+            error.statusCode = 404;
+            error.reasonCode = 'NOT_FOUND';
+            throw error;
+        }
+
+        const earliestDate = new Date(Math.min(...existingTxs.map(t => new Date(t.date).getTime())));
+
+        // Delete all transactions (skip Intraday SELL — removed via their BUY pair)
+        const toDeleteIds = existingTxs
+            .filter(t => !(t.deliveryType === 'Intraday' && t.type === 'SELL'))
+            .map(t => t._id);
+
+        for (const txId of toDeleteIds) {
+            await _deleteTransactionRecords(txId, session);
+        }
+
+        await updateRecords(earliestDate, dematAccountId, session);
+    });
+};
+
 module.exports = {
     createTransactions,
     getTransactions,
     getContracts,
     deleteTransaction,
     editTransaction,
-    editContract
+    editContract,
+    deleteContract
 };

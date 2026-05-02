@@ -85,11 +85,23 @@ const editContract = async (req, res, next) => {
   }
 };
 
+const deleteContract = async (req, res, next) => {
+  try {
+    const { referenceNumber, dematAccountId } = req.query;
+    await transactionService.deleteContract(referenceNumber, dematAccountId);
+    return ApiResponse.success(res, null, 'Contract deleted successfully');
+  } catch (error) {
+    console.error('Error deleting contract:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getTransactions,
   getContracts,
   createTransactions,
   deleteTransaction,
   editTransaction,
-  editContract
+  editContract,
+  deleteContract
 };

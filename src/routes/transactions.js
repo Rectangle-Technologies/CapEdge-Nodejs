@@ -333,4 +333,15 @@ const editContractValidation = [
 
 router.put('/edit-contract', editContractValidation, handleValidationErrors, transactionController.editContract);
 
+const deleteContractValidation = [
+  query('referenceNumber')
+    .notEmpty().withMessage('Reference number is required')
+    .trim(),
+  query('dematAccountId')
+    .notEmpty().withMessage('Demat account ID is required')
+    .isMongoId().withMessage('Invalid demat account ID')
+];
+
+router.delete('/delete-contract', deleteContractValidation, handleValidationErrors, transactionController.deleteContract);
+
 module.exports = router;
