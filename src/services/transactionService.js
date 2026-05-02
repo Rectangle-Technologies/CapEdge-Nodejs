@@ -278,7 +278,18 @@ const createTransactions = async (transactions) => {
     });
 };
 
-const _deleteTransactionLogic = async (transactionId, session) => {
+/**
+ * Deletes transaction documents and unlinks/removes their associated LedgerEntry
+ * bundles, but does NOT call updateRecords(). Used internally so that callers
+ * can batch multiple deletes before triggering a single updateRecords() pass.
+ *
+ * For an Intraday BUY, the paired SELL is automatically included.
+ * Calling this on an Intraday SELL throws a 405 NOT_ALLOWED error.
+ *
+ * Returns { date, dematAccountId } from the deleted transaction so callers
+ * can determine the correct recalculation anchor.
+ */
+const _deleteTransactionRecords = async (transactionId, session) => {
     const transaction = await Transaction.findById(transactionId).session(session);
     if (!transaction) {
         const error = new Error('Transaction not found');
@@ -338,7 +349,12 @@ const _deleteTransactionLogic = async (transactionId, session) => {
 
     await Transaction.deleteMany({ _id: { $in: txIdsToDelete } }).session(session);
 
-    await updateRecords(transaction.date, transaction.dematAccountId, session);
+    return { date: transaction.date, dematAccountId: transaction.dematAccountId };
+};
+
+const _deleteTransactionLogic = async (transactionId, session) => {
+    const { date, dematAccountId } = await _deleteTransactionRecords(transactionId, session);
+    await updateRecords(date, dematAccountId, session);
 };
 
 const deleteTransaction = async (transactionId) => {
@@ -379,6 +395,89 @@ const editTransaction = async (transactionId, newTransactionData) => {
         // Step 4: Recalculate holdings and balances from the new transaction date.
         await updateRecords(newTxs[0].date, newTxs[0].dematAccountId, session);
         return newTxs;
+    });
+};
+
+/**
+ * Edits all transactions belonging to a contract (identified by referenceNumber +
+ * dematAccountId) atomically within a single Mongoose session:
+ *
+ *  1. Fetch every existing transaction for the contract and capture the earliest date.
+ *  2. Delete all existing transaction documents and their LedgerEntry bundles
+ *     (without triggering updateRecords per-transaction).
+ *  3. Create all incoming transactions (again without per-transaction side-effects).
+ *  4. Create one bundled LedgerEntry for all non-IPO trades.
+ *  5. Call updateRecords() exactly once from min(earliestOldDate, earliestNewDate).
+ *
+ * @param {string} referenceNumber  - The contract's reference number (locked, not changeable)
+ * @param {string} dematAccountId   - The demat account ObjectId string
+ * @param {Array}  transactions     - Array of new transaction payloads (same shape as createTransactions)
+ */
+const editContract = async (referenceNumber, dematAccountId, transactions) => {
+    return await executeTransactionWithRetry(async (session) => {
+        // Step 1: Fetch all existing transactions for this contract
+        const existingTxs = await Transaction.find({
+            referenceNumber,
+            dematAccountId: new mongoose.Types.ObjectId(dematAccountId)
+        }).session(session);
+
+        // Capture the earliest old date before we delete anything
+        const earliestOldDate = existingTxs.length > 0
+            ? new Date(Math.min(...existingTxs.map(t => new Date(t.date).getTime())))
+            : null;
+
+        // Step 2: Delete all existing transactions and their ledger entries.
+        // Only call _deleteTransactionRecords on BUY (or Delivery) transactions.
+        // Intraday SELL transactions are handled automatically as paired records
+        // when their corresponding BUY is deleted.
+        const toDeleteIds = existingTxs
+            .filter(t => !(t.deliveryType === 'Intraday' && t.type === 'SELL'))
+            .map(t => t._id);
+
+        for (const txId of toDeleteIds) {
+            await _deleteTransactionRecords(txId, session);
+        }
+
+        // Step 3: Create all new transactions (only Transaction documents — no ledger, no updateRecords)
+        const result = [];
+        for (const txData of transactions) {
+            const txResult = await createTransaction(txData, session);
+            result.push(...txResult);
+        }
+
+        // Step 4: Create one bundled LedgerEntry for all non-IPO new trades
+        const ledgerTxs = result.filter(tx => !tx.isIpo);
+        if (ledgerTxs.length > 0) {
+            const bundleAmount = ledgerTxs.reduce((sum, tx) => {
+                const signed = (tx.type === 'BUY' ? -1 : 1) * tx.quantity * tx.price;
+                return sum + signed - (tx.transactionCost || 0);
+            }, 0);
+            const tradeWord = ledgerTxs.length === 1 ? 'trade' : 'trades';
+            const remarks = `Trades for ref: ${referenceNumber} (${ledgerTxs.length} ${tradeWord})`;
+
+            await LedgerEntry.create([{
+                dematAccountId: ledgerTxs[0].dematAccountId,
+                tradeTransactionIds: ledgerTxs.map(t => t._id),
+                transactionAmount: bundleAmount,
+                remarks,
+                date: ledgerTxs[0].date
+            }], { session });
+        }
+
+        // Step 5: Call updateRecords exactly once from the earliest affected date
+        const earliestNewDate = result.length > 0
+            ? new Date(Math.min(...result.map(t => new Date(t.date).getTime())))
+            : null;
+
+        const recalcDate = earliestOldDate && earliestNewDate
+            ? new Date(Math.min(earliestOldDate.getTime(), earliestNewDate.getTime()))
+            : (earliestOldDate || earliestNewDate);
+
+        if (recalcDate) {
+            await updateRecords(recalcDate, dematAccountId, session);
+        }
+
+        return result;
     });
 };
 
@@ -523,5 +622,6 @@ module.exports = {
     getTransactions,
     getContracts,
     deleteTransaction,
-    editTransaction
+    editTransaction,
+    editContract
 };

@@ -74,10 +74,22 @@ const editTransaction = async (req, res, next) => {
   }
 };
 
+const editContract = async (req, res, next) => {
+  try {
+    const { referenceNumber, dematAccountId, transactions } = req.body;
+    const result = await transactionService.editContract(referenceNumber, dematAccountId, transactions);
+    return ApiResponse.success(res, { transactions: result }, 'Contract updated successfully');
+  } catch (error) {
+    console.error('Error editing contract:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getTransactions,
   getContracts,
   createTransactions,
   deleteTransaction,
-  editTransaction
+  editTransaction,
+  editContract
 };
