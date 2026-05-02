@@ -96,11 +96,21 @@ const editLedgerEntry = async (req, res, next) => {
   }
 };
 
+const getAllClosingBalances = async (req, res, next) => {
+  try {
+    const result = await ledgerService.getAllClosingBalances();
+    return ApiResponse.success(res, result, 'Closing balances retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getLedgerEntries,
   addLedgerEntry,
   deleteLedgerEntry,
   exportLedger,
   fixLedgerEntries,
-  editLedgerEntry
+  editLedgerEntry,
+  getAllClosingBalances
 };

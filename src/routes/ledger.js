@@ -59,6 +59,7 @@ const addLedgerEntryValidation = [
 ];
 
 // Routes
+router.get('/all-closing-balances', ledgerController.getAllClosingBalances);
 router.get('/get/:dematAccountId', queryValidation, handleValidationErrors, ledgerController.getLedgerEntries);
 router.post('/add', addLedgerEntryValidation, handleValidationErrors, ledgerController.addLedgerEntry);
 router.delete('/:id', [param('id').isMongoId().withMessage('Invalid ledger entry ID')], handleValidationErrors, ledgerController.deleteLedgerEntry);
