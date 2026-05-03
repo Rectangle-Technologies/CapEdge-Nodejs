@@ -257,6 +257,94 @@ const editTransactionValidation = [
 
 router.put('/edit/:id', idValidation, editTransactionValidation, handleValidationErrors, transactionController.editTransaction);
 
+const editContractValidation = [
+  body('referenceNumber')
+    .notEmpty().withMessage('Reference number is required')
+    .trim(),
+  body('dematAccountId')
+    .notEmpty().withMessage('Demat account ID is required')
+    .isMongoId().withMessage('Invalid demat account ID'),
+  body('transactions')
+    .isArray({ min: 1 }).withMessage('Transactions must be a non-empty array'),
+  body('transactions.*.date')
+    .notEmpty().withMessage('Transaction date is required')
+    .isISO8601().withMessage('Invalid date format')
+    .custom((value) => {
+      const inputDate = new Date(value);
+      inputDate.setHours(0, 0, 0, 0);
+      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      if (inputDate > today) throw new Error('Transaction date cannot be in the future');
+      return true;
+    }),
+  body('transactions.*.deliveryType')
+    .notEmpty().withMessage('Delivery type is required')
+    .isIn(deliveryTypes).withMessage(`Delivery type must be one of: ${deliveryTypes.join(', ')}`),
+  body('transactions.*.type')
+    .custom((value, { req, path }) => {
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body.transactions?.[index]?.deliveryType;
+      if (deliveryType === 'Delivery' && !value)
+        throw new Error('Type is required for Delivery type transactions');
+      return true;
+    }),
+  body('transactions.*.quantity')
+    .notEmpty().withMessage('Quantity is required')
+    .isFloat({ min: 0.000001 }).withMessage('Quantity must be a positive number'),
+  body('transactions.*.price')
+    .custom((value, { req, path }) => {
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body.transactions?.[index]?.deliveryType;
+      if (deliveryType === 'Delivery') {
+        if (value === undefined || value === null || value === '')
+          throw new Error('Price is required for Delivery type transactions');
+        if (typeof value !== 'number' || value < 0)
+          throw new Error('Price must be 0 or greater');
+      }
+      return true;
+    }),
+  body('transactions.*.buyPrice')
+    .custom((value, { req, path }) => {
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body.transactions?.[index]?.deliveryType;
+      if (deliveryType === 'Intraday') {
+        if (!value) throw new Error('Buy price is required for Intraday type transactions');
+        if (typeof value !== 'number' || value <= 0)
+          throw new Error('Buy price must be greater than 0');
+      }
+      return true;
+    }),
+  body('transactions.*.sellPrice')
+    .custom((value, { req, path }) => {
+      const index = path.match(/\[(\d+)\]/)?.[1];
+      const deliveryType = req.body.transactions?.[index]?.deliveryType;
+      if (deliveryType === 'Intraday') {
+        if (!value) throw new Error('Sell price is required for Intraday type transactions');
+        if (typeof value !== 'number' || value <= 0)
+          throw new Error('Sell price must be greater than 0');
+      }
+      return true;
+    }),
+  body('transactions.*.securityId')
+    .notEmpty().withMessage('Security ID is required')
+    .isMongoId().withMessage('Invalid security ID'),
+  body('transactions.*.dematAccountId')
+    .notEmpty().withMessage('Demat account ID is required')
+    .isMongoId().withMessage('Invalid demat account ID'),
+];
+
+router.put('/edit-contract', editContractValidation, handleValidationErrors, transactionController.editContract);
+
+const deleteContractValidation = [
+  query('referenceNumber')
+    .notEmpty().withMessage('Reference number is required')
+    .trim(),
+  query('dematAccountId')
+    .notEmpty().withMessage('Demat account ID is required')
+    .isMongoId().withMessage('Invalid demat account ID')
+];
+
+router.delete('/delete-contract', deleteContractValidation, handleValidationErrors, transactionController.deleteContract);
+
 // Contract upload (PDF → parsed lines → user pre-fills AddTransaction form
 // → saves via existing POST /transaction/create)
 router.post('/upload-contract', contractUpload.single('file'), transactionController.uploadContract);

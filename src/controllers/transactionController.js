@@ -75,6 +75,28 @@ const editTransaction = async (req, res, next) => {
   }
 };
 
+const editContract = async (req, res, next) => {
+  try {
+    const { referenceNumber, dematAccountId, transactions } = req.body;
+    const result = await transactionService.editContract(referenceNumber, dematAccountId, transactions);
+    return ApiResponse.success(res, { transactions: result }, 'Contract updated successfully');
+  } catch (error) {
+    console.error('Error editing contract:', error);
+    next(error);
+  }
+};
+
+const deleteContract = async (req, res, next) => {
+  try {
+    const { referenceNumber, dematAccountId } = req.query;
+    await transactionService.deleteContract(referenceNumber, dematAccountId);
+    return ApiResponse.success(res, null, 'Contract deleted successfully');
+  } catch (error) {
+    console.error('Error deleting contract:', error);
+    next(error);
+  }
+};
+
 const uploadContract = async (req, res, next) => {
   try {
     if (!req.file || !req.file.buffer) {
@@ -97,5 +119,7 @@ module.exports = {
   createTransactions,
   deleteTransaction,
   editTransaction,
+  editContract,
+  deleteContract,
   uploadContract
 };
