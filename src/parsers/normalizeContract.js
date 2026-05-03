@@ -75,8 +75,11 @@ const expandLines = (summary) => {
     const matched = Math.min(s.buyQty, s.sellQty);
 
     if (matched > 0) {
-      const buyPrice = s.buyWAP || 0;
-      const sellPrice = s.sellWAP || 0;
+      // Use WAP after brokerage so the per-share price already absorbs the
+      // broker's brokerage (BUY pays more, SELL realizes less). Falls back
+      // to pre-brokerage WAP if the contract didn't carry the post column.
+      const buyPrice = s.buyWAPAfter || s.buyWAP || 0;
+      const sellPrice = s.sellWAPAfter || s.sellWAP || 0;
       const tradeValue = matched * (buyPrice + sellPrice);
       totalTradeValue += tradeValue;
       lines.push({
@@ -98,7 +101,7 @@ const expandLines = (summary) => {
 
     const leftoverBuy = s.buyQty - matched;
     if (leftoverBuy > 0) {
-      const price = s.buyWAP || 0;
+      const price = s.buyWAPAfter || s.buyWAP || 0;
       const value = leftoverBuy * price;
       totalTradeValue += value;
       lines.push({
@@ -120,7 +123,7 @@ const expandLines = (summary) => {
 
     const leftoverSell = s.sellQty - matched;
     if (leftoverSell > 0) {
-      const price = s.sellWAP || 0;
+      const price = s.sellWAPAfter || s.sellWAP || 0;
       const value = leftoverSell * price;
       totalTradeValue += value;
       lines.push({
