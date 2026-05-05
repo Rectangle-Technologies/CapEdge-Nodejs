@@ -37,6 +37,14 @@ const parseSGSSL = ({ pages }) => {
   // Step 2: group consecutive pages by UCC (or fallback by contract note no)
   const groups = groupPagesByContract(pageMetas);
 
+  // The settlement number is shared across all contracts in the PDF.
+  // It is the value under the "Equity NCL" column in the settlement grid,
+  // and also appears in the Obligation Details as "Settlement Number".
+  // We use it as the reference number (contractNoteNo) instead of the
+  // per-client CONTRACT NOTE NO, because the client records transactions
+  // by settlement number for SGSSL.
+  const settlementNo = pageMetas.find((m) => m.settlementNo)?.settlementNo || null;
+
   // Step 3: per group, parse summary rows and charges
   return groups.map((group) => {
     const groupPages = group.pageIndexes.map((i) => pages[i]);
@@ -46,7 +54,7 @@ const parseSGSSL = ({ pages }) => {
     return {
       brokerName: 'South Gujarat Shares and Sharebrokers Limited',
       brokerCode: 'SGSSL',
-      contractNoteNo: group.contractNoteNo,
+      contractNoteNo: settlementNo || group.contractNoteNo,
       tradeDate: group.tradeDate,
       client: group.client,
       summary,
@@ -64,6 +72,7 @@ const extractPageMeta = (page) => {
   const meta = {
     ucc: null,
     contractNoteNo: null,
+    settlementNo: null,
     tradeDate: null,
     client: { name: null, pan: null, ucc: null }
   };
@@ -86,6 +95,11 @@ const extractPageMeta = (page) => {
   // PAN
   const panItem = findValueAfterLabel(items, /PAN of Client/i, /^[A-Z0-9*]{8,12}$/);
   if (panItem) meta.client.pan = panItem.str;
+
+  // Settlement Number from Obligation Details block (e.g. "Settlement Number | 2026078")
+  // This is shared across all contracts in the PDF and is used as the reference number.
+  const settlementNoMatch = text.match(/Settlement Number[^|\n]*[|\s]+(\d+)/i);
+  if (settlementNoMatch) meta.settlementNo = settlementNoMatch[1];
 
   // Client name: uppercase 3+ word string between client-related labels
   const nameMatch = text.match(/Name of the Client\s*:?\s*\|?\s*\n?([A-Z][A-Z\s.&]+?)(?:\n|\|)/);
