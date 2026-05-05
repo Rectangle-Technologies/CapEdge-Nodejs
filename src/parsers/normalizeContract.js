@@ -15,7 +15,7 @@
  * unit-tested without a live MongoDB.
  */
 
-const buildPreviewContract = async (rawContract, lookups) => {
+const buildPreviewContract = async (rawContract, lookups, userAccountId = null) => {
   const { lines } = expandLines(rawContract.summary);
   // Per product decision: charges (transactionCost) default to 0 — no proration
   // from the contract-level totals. User can edit per-row in the form.
@@ -30,11 +30,16 @@ const buildPreviewContract = async (rawContract, lookups) => {
     }
   }
 
-  // Resolve user account + demat
+  // Resolve user account + demat.
+  // If the caller supplied a userAccountId (from the frontend's selected
+  // UserAccount), use it directly for the demat lookup so we don't depend on
+  // a fragile client-name fuzzy match. We still attempt the fuzzy match for
+  // display / warning purposes only.
   const userAccount = await lookups.fuzzyMatchUserAccount(rawContract.client?.name);
   let dematAccount = null;
-  if (userAccount) {
-    dematAccount = await lookups.findDematByUserAndBroker(userAccount._id, rawContract.brokerCode);
+  const resolvedUserAccountId = userAccountId || userAccount?._id || null;
+  if (resolvedUserAccountId) {
+    dematAccount = await lookups.findDematByUserAndBroker(resolvedUserAccountId, rawContract.brokerCode);
   }
 
   const warnings = [];

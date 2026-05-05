@@ -105,7 +105,8 @@ const uploadContract = async (req, res, next) => {
       e.reasonCode = 'BAD_REQUEST';
       throw e;
     }
-    const result = await contractUploadService.previewContract(req.file.buffer, req.file.originalname);
+    const userAccountId = req.body.userAccountId || null;
+    const result = await contractUploadService.previewContract(req.file.buffer, req.file.originalname, userAccountId);
     return ApiResponse.success(res, result, 'Contract parsed successfully');
   } catch (error) {
     console.error('Error parsing contract:', error);

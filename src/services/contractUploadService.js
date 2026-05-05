@@ -56,9 +56,9 @@ const buildLookups = () => ({
 const fuzzyMatchBroker = async (brokerCode) => {
   const codeToTokens = {
     [BROKERS.WADIWALA]: ['wadiwala'],
-    [BROKERS.SGSSL]: ['south gujarat', 'sgssl']
+    [BROKERS.SGSSL]: ['s g s s l', 'south gujarat', 'sgssl']
   };
-  const tokens = codeToTokens[brokerCode] || [];
+  const tokens = codeToTokens[(brokerCode || '').toLowerCase()] || [];
   for (const t of tokens) {
     const broker = await Broker.findOne({ name: { $regex: escapeRegex(t), $options: 'i' } }).lean();
     if (broker) return broker;
@@ -77,13 +77,13 @@ const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * endpoint and no source-PDF persistence — the buffer is parsed in memory
  * and discarded.
  */
-const previewContract = async (buffer, fileName) => {
+const previewContract = async (buffer, fileName, userAccountId = null) => {
   const { broker, rawContracts } = await parseContractPDF(buffer);
   const lookups = buildLookups();
 
   const previews = [];
   for (const raw of rawContracts) {
-    const preview = await buildPreviewContract(raw, lookups);
+    const preview = await buildPreviewContract(raw, lookups, userAccountId);
     previews.push(preview);
   }
 
