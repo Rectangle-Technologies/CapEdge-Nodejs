@@ -359,76 +359,23 @@ const editLedgerEntry = async (entryId, data) => {
 
 /**
  * Get current closing balance for all demat accounts.
- * Returns an array of { dematAccountId, userAccount, broker, closingBalance }.
+ * Uses the denormalized balance field on DematAccount, which is kept in sync
+ * by updateRecords on every ledger entry add/edit/delete.
  */
 const getAllClosingBalances = async () => {
-  const balances = await LedgerEntry.aggregate([
-    {
-      $group: {
-        _id: '$dematAccountId',
-        closingBalance: { $sum: '$transactionAmount' }
-      }
-    },
-    {
-      $lookup: {
-        from: 'demataccounts',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'dematAccount'
-      }
-    },
-    { $unwind: { path: '$dematAccount', preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: 'useraccounts',
-        localField: 'dematAccount.userAccountId',
-        foreignField: '_id',
-        as: 'userAccount'
-      }
-    },
-    { $unwind: { path: '$userAccount', preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: 'brokers',
-        localField: 'dematAccount.brokerId',
-        foreignField: '_id',
-        as: 'broker'
-      }
-    },
-    { $unwind: { path: '$broker', preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 0,
-        dematAccountId: '$_id',
-        userAccountId: '$userAccount._id',
-        userAccountName: '$userAccount.name',
-        brokerId: '$broker._id',
-        brokerName: '$broker.name',
-        closingBalance: 1
-      }
-    },
-    { $sort: { userAccountName: 1, brokerName: 1 } }
-  ]);
-
-  // Also include demat accounts that have no ledger entries (zero balance)
   const allDematAccounts = await DematAccount.find()
     .populate('userAccountId', 'name')
     .populate('brokerId', 'name')
     .lean();
 
-  const balanceMap = new Map(balances.map((b) => [b.dematAccountId.toString(), b]));
-
-  const result = allDematAccounts.map((acc) => {
-    const existing = balanceMap.get(acc._id.toString());
-    return existing || {
-      dematAccountId: acc._id,
-      userAccountId: acc.userAccountId?._id,
-      userAccountName: acc.userAccountId?.name || 'Unknown',
-      brokerId: acc.brokerId?._id,
-      brokerName: acc.brokerId?.name || 'Unknown',
-      closingBalance: 0
-    };
-  });
+  const result = allDematAccounts.map((acc) => ({
+    dematAccountId: acc._id,
+    userAccountId: acc.userAccountId?._id,
+    userAccountName: acc.userAccountId?.name || 'Unknown',
+    brokerId: acc.brokerId?._id,
+    brokerName: acc.brokerId?.name || 'Unknown',
+    closingBalance: Math.round((acc.balance ?? 0) * 100) / 100
+  }));
 
   result.sort((a, b) => a.userAccountName.localeCompare(b.userAccountName) || a.brokerName.localeCompare(b.brokerName));
 
