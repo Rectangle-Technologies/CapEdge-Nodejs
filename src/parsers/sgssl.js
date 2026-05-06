@@ -101,8 +101,8 @@ const extractPageMeta = (page) => {
   const settlementNoMatch = text.match(/Settlement Number[^|\n]*[|\s]+(\d+)/i);
   if (settlementNoMatch) meta.settlementNo = settlementNoMatch[1];
 
-  // Client name: uppercase 3+ word string between client-related labels
-  const nameMatch = text.match(/Name of the Client\s*:?\s*\|?\s*\n?([A-Z][A-Z\s.&]+?)(?:\n|\|)/);
+  // Client name: uppercase string after "Name of the Client", allowing parentheses (e.g. HUF accounts)
+  const nameMatch = text.match(/Name of the Client\s*:?\s*\|?\s*\n?([A-Z][A-Z\s.&()]+?)(?:\n|\|)/);
   if (nameMatch) meta.client.name = nameMatch[1].trim();
 
   return meta;
