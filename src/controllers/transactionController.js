@@ -1,4 +1,5 @@
 const transactionService = require('../services/transactionService');
+const contractUploadService = require('../services/contractUploadService');
 const ApiResponse = require('../utils/response');
 
 const getTransactions = async (req, res, next) => {
@@ -96,6 +97,23 @@ const deleteContract = async (req, res, next) => {
   }
 };
 
+const uploadContract = async (req, res, next) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      const e = new Error('PDF file is required');
+      e.statusCode = 400;
+      e.reasonCode = 'BAD_REQUEST';
+      throw e;
+    }
+    const userAccountId = req.body.userAccountId || null;
+    const result = await contractUploadService.previewContract(req.file.buffer, req.file.originalname, userAccountId);
+    return ApiResponse.success(res, result, 'Contract parsed successfully');
+  } catch (error) {
+    console.error('Error parsing contract:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getTransactions,
   getContracts,
@@ -103,5 +121,6 @@ module.exports = {
   deleteTransaction,
   editTransaction,
   editContract,
-  deleteContract
+  deleteContract,
+  uploadContract
 };

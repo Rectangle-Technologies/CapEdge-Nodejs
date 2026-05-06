@@ -12,6 +12,17 @@
 
 **Project Name:** CapEdge - Stock Trading Portfolio Management System
 
+### Contract Upload — Environment Configuration
+
+The contract-upload feature (`POST /transaction/upload-contract`) parses broker
+contract PDFs (SGSSL, R. Wadiwala) and creates Transactions + a bundled
+LedgerEntry. Source-PDF persistence is gated by these env vars:
+
+| Var | Default | Purpose |
+|---|---|---|
+| `CONTRACT_UPLOAD_STORE_FILES` | `false` | When `true`, the uploaded PDF is written to `CONTRACT_UPLOAD_DIR` and a `ContractFile` row is created so the source PDF can later be downloaded from `/contracts`. When `false`, the PDF is parsed in memory and discarded after the preview/confirm round-trip. |
+| `CONTRACT_UPLOAD_DIR` | `uploads/contracts` | Directory for persisted PDFs (only used when `CONTRACT_UPLOAD_STORE_FILES=true`). Absolute path, or relative to the backend root. |
+
 **Technology Stack:**
 - **Backend:** Node.js with Express.js
 - **Database:** MongoDB (NoSQL)
