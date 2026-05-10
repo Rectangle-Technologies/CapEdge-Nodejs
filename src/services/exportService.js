@@ -90,16 +90,14 @@ const exportPnlToExcel = async (data, sheetName) => {
       worksheet.getCell(`B${currentRow}`).value = tx.buyDate ? formatDate(tx.buyDate) : '';
       worksheet.getCell(`C${currentRow}`).value = tx.quantity || null;
       worksheet.getCell(`D${currentRow}`).value = tx.buyPrice || null;
-      worksheet.getCell(`D${currentRow}`).numFmt = inrFormat;
-      const buyAmount = (tx.quantity && tx.buyPrice) ? tx.quantity * tx.buyPrice : 0;
+      const buyAmount = parseFloat(((tx.quantity && tx.buyPrice) ? tx.quantity * tx.buyPrice : 0).toFixed(2));
       worksheet.getCell(`E${currentRow}`).value = buyAmount || null;
       worksheet.getCell(`E${currentRow}`).numFmt = inrFormat;
       secBuyAmount += buyAmount;
       worksheet.getCell(`F${currentRow}`).value = tx.sellDate ? formatDate(tx.sellDate) : '';
       worksheet.getCell(`G${currentRow}`).value = tx.quantity || null;
       worksheet.getCell(`H${currentRow}`).value = tx.sellPrice || null;
-      worksheet.getCell(`H${currentRow}`).numFmt = inrFormat;
-      const sellAmount = (tx.quantity && tx.sellPrice) ? tx.quantity * tx.sellPrice : 0;
+      const sellAmount = parseFloat(((tx.quantity && tx.sellPrice) ? tx.quantity * tx.sellPrice : 0).toFixed(2));
       worksheet.getCell(`I${currentRow}`).value = sellAmount || null;
       worksheet.getCell(`I${currentRow}`).numFmt = inrFormat;
       secSellAmount += sellAmount;
@@ -109,8 +107,8 @@ const exportPnlToExcel = async (data, sheetName) => {
       let taxableAmount = 0;
       
       if (tx.resultType === 'gain') {
-        gainLossAmount = sellAmount - buyAmount;
-        taxableAmount = gainLossAmount - charges;
+        gainLossAmount = parseFloat((sellAmount - buyAmount).toFixed(2));
+        taxableAmount = parseFloat((gainLossAmount - charges).toFixed(2));
         if (tx.gainType === 'LTCG') {
           worksheet.getCell(`J${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`J${currentRow}`).numFmt = inrFormat;
@@ -125,8 +123,8 @@ const exportPnlToExcel = async (data, sheetName) => {
           secGainIntraday += gainLossAmount;
         }
       } else if (tx.resultType === 'loss') {
-        gainLossAmount = buyAmount - sellAmount;
-        taxableAmount = -(gainLossAmount + charges); // Negative for loss (loss + charges)
+        gainLossAmount = parseFloat((buyAmount - sellAmount).toFixed(2));
+        taxableAmount = parseFloat((-(gainLossAmount + charges)).toFixed(2)); // Negative for loss (loss + charges)
         if (tx.gainType === 'LTCG') {
           worksheet.getCell(`M${currentRow}`).value = gainLossAmount;
           worksheet.getCell(`M${currentRow}`).numFmt = inrFormat;
@@ -250,9 +248,7 @@ const exportPnlToExcel = async (data, sheetName) => {
   // Apply currency format to all currency columns for the entire data range
   const lastRow = currentRow;
   for (let row = 5; row <= lastRow; row++) {
-    worksheet.getCell(`D${row}`).numFmt = inrFormat; // Buy Price
     worksheet.getCell(`E${row}`).numFmt = inrFormat; // Buy Amount
-    worksheet.getCell(`H${row}`).numFmt = inrFormat; // Sell Price
     worksheet.getCell(`I${row}`).numFmt = inrFormat; // Sell Amount
     worksheet.getCell(`J${row}`).numFmt = inrFormat; // Gain Long Term
     worksheet.getCell(`K${row}`).numFmt = inrFormat; // Gain Short Term

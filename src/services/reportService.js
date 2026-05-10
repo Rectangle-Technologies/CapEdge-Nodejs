@@ -116,12 +116,12 @@ const getPnLRecords = async (data) => {
 
           const resultType = txn.price >= holding.price ? 'gain' : 'loss';
           const gainType = getGainType(holding.buyDate, txn.date, 'EQUITY');
-          const taxableAmount = ((txn.price - holding.price) * matchedQuantity) - (txn.transactionCost || 0) - (holding.transactionCost || 0);
+          const taxableAmount = parseFloat(((txn.price - holding.price) * matchedQuantity - (txn.transactionCost || 0) - (holding.transactionCost || 0)).toFixed(2));
           let calculatedTax = 0;
           if (gainType === 'LTCG') {
-            calculatedTax = taxableAmount * financialYear.ltcgRate;
+            calculatedTax = parseFloat((taxableAmount * financialYear.ltcgRate).toFixed(2));
           } else {
-            calculatedTax = taxableAmount * financialYear.stcgRate;
+            calculatedTax = parseFloat((taxableAmount * financialYear.stcgRate).toFixed(2));
           }
 
           if (!result[txn.securityId]) {
@@ -133,7 +133,7 @@ const getPnLRecords = async (data) => {
             quantity: matchedQuantity,
             buyPrice: holding.price,
             sellPrice: txn.price,
-            transactionCost: (txn.transactionCost || 0) + (holding.transactionCost || 0),
+            transactionCost: parseFloat(((txn.transactionCost || 0) + (holding.transactionCost || 0)).toFixed(2)),
             transactionId: txn._id,
             resultType,
             gainType,
@@ -156,9 +156,9 @@ const getPnLRecords = async (data) => {
         if (sellTransaction) {
           const resultType = sellTransaction.price >= txn.price ? 'gain' : 'loss';
           const gainType = 'Intraday';
-          const taxableAmount = ((sellTransaction.price - txn.price) * txn.quantity) - (sellTransaction.transactionCost || 0) - (txn.transactionCost || 0);
+          const taxableAmount = parseFloat(((sellTransaction.price - txn.price) * txn.quantity - (sellTransaction.transactionCost || 0) - (txn.transactionCost || 0)).toFixed(2));
           let calculatedTax = 0;
-          calculatedTax = taxableAmount * financialYear.intradayRate;
+          calculatedTax = parseFloat((taxableAmount * financialYear.intradayRate).toFixed(2));
 
           if (!result[txn.securityId]) {
             result[txn.securityId] = [];
@@ -168,7 +168,7 @@ const getPnLRecords = async (data) => {
             sellDate: sellTransaction.date,
             quantity: txn.quantity,
             buyPrice: txn.price,
-            transactionCost: (sellTransaction.transactionCost || 0) + (txn.transactionCost || 0),
+            transactionCost: parseFloat(((sellTransaction.transactionCost || 0) + (txn.transactionCost || 0)).toFixed(2)),
             sellPrice: sellTransaction.price,
             transactionId: sellTransaction._id,
             resultType,
