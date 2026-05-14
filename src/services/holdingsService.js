@@ -35,8 +35,8 @@ const getHoldingsFromCollection = async (query, options) => {
     aggMatch.securityId = toObjectId(aggMatch.securityId);
   }
 
-  const [holdings, valueAgg] = await Promise.all([
-    Holdings.find(query, null, options)
+  const [allHoldings, valueAgg] = await Promise.all([
+    Holdings.find(query)
       .populate('securityId')
       .populate({
         path: 'dematAccountId',
@@ -52,6 +52,18 @@ const getHoldingsFromCollection = async (query, options) => {
       { $group: { _id: null, total: { $sum: { $multiply: ['$quantity', '$price'] } }, securities: { $addToSet: '$securityId' } } }
     ])
   ]);
+
+  // Sort by security name
+  allHoldings.sort((a, b) => {
+    const nameA = (a.securityId?.name || '').toLowerCase();
+    const nameB = (b.securityId?.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  // Apply pagination in memory
+  const skip = options.skip || 0;
+  const limit = options.limit || 0;
+  const holdings = limit > 0 ? allHoldings.slice(skip, skip + limit) : allHoldings;
 
   const totalHoldingValue = valueAgg.length > 0 ? valueAgg[0].total : 0;
   const totalSecurities = valueAgg.length > 0 ? valueAgg[0].securities.length : 0;
@@ -115,8 +127,17 @@ const getHoldingsFromReport = async (financialYearId, query, options, dematAccou
   const totalHoldingValue = allHoldings.reduce((sum, h) => sum + (h.quantity || 0) * (h.price || 0), 0);
   const totalSecurities = new Set(allHoldings.map(h => h.securityId?.toString()).filter(Boolean)).size;
 
-  // Sort by buyDate
-  allHoldings.sort((a, b) => new Date(a.buyDate) - new Date(b.buyDate));
+  // Fetch security names for sorting
+  const allSecurityIds = [...new Set(allHoldings.map(h => h.securityId).filter(Boolean))];
+  const sortSecurities = await Security.find({ _id: { $in: allSecurityIds } }, 'name').lean();
+  const sortNameMap = new Map(sortSecurities.map(s => [s._id.toString(), s.name]));
+
+  // Sort by security name
+  allHoldings.sort((a, b) => {
+    const nameA = (sortNameMap.get(a.securityId?.toString()) || '').toLowerCase();
+    const nameB = (sortNameMap.get(b.securityId?.toString()) || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
 
   // Apply pagination
   const skip = options.skip || 0;
