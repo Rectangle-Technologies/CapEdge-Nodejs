@@ -3,6 +3,7 @@ const Transaction = require('../models/Transaction');
 const Holdings = require('../models/Holdings');
 const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require('../constants');
 const mongoose = require('mongoose');
+const { updateRecords } = require('./recordService');
 
 /**
  * Security Service
@@ -252,100 +253,240 @@ const processSplit = async (payload) => {
   try {
     const { securityId, splitDate, splitRatio, transactions } = payload;
 
-    // Fetch security
     const security = await Security.findById(securityId).session(session);
     if (!security) {
       const error = new Error('Security not found');
       error.statusCode = 404;
+      error.reasonCode = 'NOT_FOUND';
       throw error;
     }
 
-    // Check that splitDate is after the latest transaction for this security
     const latestTransaction = await Transaction.findOne({ securityId })
       .sort({ date: -1 })
       .session(session);
     if (latestTransaction && new Date(splitDate) < latestTransaction.date) {
       const error = new Error('Split date cannot be before the latest transaction date for this security');
       error.statusCode = 400;
+      error.reasonCode = 'BAD_REQUEST';
       throw error;
     }
 
-    // Update each transaction and holdings
-    for (let i = 0; i < transactions.length; i++) {
-      const txData = transactions[i];
-
-      const transaction = Transaction.findById(txData.transactionId).session(session);
-      const holding = Holdings.findById(txData.holdingId).session(session);
-
-      const [transactionResult, holdingResult] = await Promise.all([transaction, holding]);
-
-      if (!holdingResult) {
-        const error = new Error(`Holding not found: ${txData.holdingId}`);
-        error.statusCode = 404;
+    // Reject re-submission of the same transaction within the same split event
+    // (same calendar day + same ratio). Multiple distinct splits over the
+    // security's life (different dates or different ratios) remain allowed —
+    // the same lot legitimately participates in each.
+    const sameDayKey = new Date(splitDate).toISOString().split('T')[0];
+    const existingSplitEntry = security.splitHistory.find(
+      s => s.splitRatio === splitRatio &&
+           new Date(s.splitDate).toISOString().split('T')[0] === sameDayKey
+    );
+    if (existingSplitEntry) {
+      const alreadySplitIds = new Set(
+        existingSplitEntry.transactions.map(t => t.transactionId.toString())
+      );
+      const duplicate = transactions.find(
+        t => alreadySplitIds.has(t.transactionId.toString())
+      );
+      if (duplicate) {
+        console.error(
+          `[processSplit] duplicate: txId=${duplicate.transactionId} already in splitHistory entry (${splitRatio}, ${sameDayKey})`
+        );
+        const error = new Error(
+          `A ${splitRatio} split on ${sameDayKey} has already been recorded for one or more of the selected holdings. ` +
+          `Cannot apply the same split twice.`
+        );
+        error.statusCode = 409;
+        error.reasonCode = 'ALREADY_EXISTS';
         throw error;
-      }
-
-      if (!transactionResult) {
-        const error = new Error(`Transaction not found: ${txData.transactionId}`);
-        error.statusCode = 404;
-        throw error;
-      }
-
-      // Check if transaction qty and holding qty match before split
-      if (transactionResult.quantity > txData.quantityBeforeSplit) {
-        // Split the transaction into two
-        const soldQty = transactionResult.quantity - txData.quantityBeforeSplit;
-        transactionResult.quantity = soldQty;
-
-        // Create new transaction for split shares
-        var newTrnDetails = {...transactionResult.toObject()};
-        newTrnDetails.quantity = txData.quantityAfterSplit;
-        newTrnDetails.price = txData.priceAfterSplit;
-        delete newTrnDetails._id; delete newTrnDetails.id; delete newTrnDetails.createdAt; delete newTrnDetails.updatedAt;
-        var newTransaction = new Transaction(newTrnDetails);
-        
-        // Update holding
-        holdingResult.quantity = txData.quantityAfterSplit;
-        holdingResult.price = txData.priceAfterSplit;
-        
-        // Save all changes
-        var oldTrnSave = transactionResult.save({ session });
-        var newTrnSave = newTransaction.save({ session });
-        var [_oldTrn, newTrxn] = await Promise.all([oldTrnSave, newTrnSave]);
-
-        // Link new transaction to holding
-        txData.transactionId = newTrxn._id;
-        holdingResult.transactionId = newTrxn._id;
-        await holdingResult.save({ session });
-      } else if (holdingResult.quantity > txData.quantityBeforeSplit) {
-        const error = new Error(`Holding quantity mismatch for holding: ${txData.holdingId}`);
-        error.statusCode = 400;
-        throw error;
-      } else {
-        // Update transaction quantity and price
-        transactionResult.quantity = txData.quantityAfterSplit;
-        transactionResult.price = txData.priceAfterSplit;
-        holdingResult.quantity = txData.quantityAfterSplit;
-        holdingResult.price = txData.priceAfterSplit;
-
-        var trnResult = transactionResult.save({ session });
-        var holdingResultSave = holdingResult.save({ session });
-        await Promise.all([trnResult, holdingResultSave]);
       }
     }
 
-    // Add or merge split record into security history
-    const existingSplitEntry = security.splitHistory.find(
-      s => s.splitRatio === splitRatio &&
-           new Date(s.splitDate).toISOString().split('T')[0] === new Date(splitDate).toISOString().split('T')[0]
-    );
+    // Collected during the loop and used after for the aggregate cross-check
+    // and for triggering a focused FY snapshot rebuild per affected demat.
+    const branchARequiredByDemat = new Map();   // dematId(string) -> sum(assumedSoldQty)
+    const earliestDateByDemat = new Map();      // dematId(string) -> earliest tx.date
+
+    for (const txData of transactions) {
+      const [txn, holding] = await Promise.all([
+        Transaction.findById(txData.transactionId).session(session),
+        Holdings.findById(txData.holdingId).session(session)
+      ]);
+      if (!txn) {
+        const error = new Error(`Transaction not found: ${txData.transactionId}`);
+        error.statusCode = 404;
+        error.reasonCode = 'NOT_FOUND';
+        throw error;
+      }
+      if (!holding) {
+        const error = new Error(`Holding not found: ${txData.holdingId}`);
+        error.statusCode = 404;
+        error.reasonCode = 'NOT_FOUND';
+        throw error;
+      }
+
+      // Invariant: the holding's persisted quantity must equal what the client
+      // submitted as quantityBeforeSplit. If they differ, the client is operating
+      // on stale data (e.g. holdings regressed by a prior updateRecords pass)
+      // and we refuse rather than letting Branch A fabricate phantom shares.
+      if (Number(holding.quantity) !== Number(txData.quantityBeforeSplit)) {
+        console.error(
+          `[processSplit] holding qty mismatch: holdingId=${holding._id} db.qty=${holding.quantity} client.qBeforeSplit=${txData.quantityBeforeSplit}`
+        );
+        const error = new Error('The holding data is out of date. Please refresh the page and try again.');
+        error.statusCode = 409;
+        error.reasonCode = 'STATE_MISMATCH';
+        throw error;
+      }
+
+      // Defensive: a consistent DB never has tx.quantity < holding.quantity for
+      // a holding pointing at that tx — the holding can only shrink from
+      // FIFO-matched sells, never grow beyond the BUY's original quantity.
+      if (txn.quantity < txData.quantityBeforeSplit) {
+        console.error(
+          `[processSplit] tx.qty < holding.qty: txId=${txn._id} txQty=${txn.quantity} holdingQty=${txData.quantityBeforeSplit}`
+        );
+        const error = new Error('Data inconsistency detected — this split cannot be processed. Please contact support.');
+        error.statusCode = 409;
+        error.reasonCode = 'DATA_INCONSISTENCY';
+        throw error;
+      }
+
+      const dematKey = txn.dematAccountId.toString();
+      const prevEarliest = earliestDateByDemat.get(dematKey);
+      if (!prevEarliest || txn.date < prevEarliest) {
+        earliestDateByDemat.set(dematKey, txn.date);
+      }
+
+      if (txn.quantity > txData.quantityBeforeSplit) {
+        // Branch A: this BUY was partially sold. The "assumed sold" residual
+        // must be backed by historical SELL activity in (security, demat)
+        // between the BUY date and the split date — this guard replaces the
+        // previous unverified `soldQty` inference, which is what allowed the
+        // regression-induced double-run to fabricate phantom transactions.
+        const assumedSoldQty = txn.quantity - txData.quantityBeforeSplit;
+
+        const sellAgg = await Transaction.aggregate([
+          { $match: {
+              securityId: txn.securityId,
+              dematAccountId: txn.dematAccountId,
+              type: 'SELL',
+              deliveryType: 'Delivery',
+              date: { $lt: new Date(splitDate), $gte: txn.date }
+          }},
+          { $group: { _id: null, total: { $sum: '$quantity' } } }
+        ]).session(session);
+        const sold = sellAgg[0]?.total ?? 0;
+
+        if (sold < assumedSoldQty) {
+          console.error(
+            `[processSplit] sell coverage missing: txId=${txn._id} txQty=${txn.quantity} qBeforeSplit=${txData.quantityBeforeSplit} required=${assumedSoldQty} actualSold=${sold}`
+          );
+          const error = new Error(
+            'Cannot apply this split — the underlying transaction data suggests this lot may have already been split. ' +
+            'Please refresh the page and try again. If the issue persists, contact support.'
+          );
+          error.statusCode = 409;
+          error.reasonCode = 'SELL_COVERAGE_MISSING';
+          throw error;
+        }
+
+        branchARequiredByDemat.set(
+          dematKey,
+          (branchARequiredByDemat.get(dematKey) || 0) + assumedSoldQty
+        );
+
+        // Reduce OLD transaction to the residual qty.
+        txn.quantity = assumedSoldQty;
+
+        // Clone OLD into a NEW transaction representing the post-split lot.
+        const newTrnDetails = { ...txn.toObject() };
+        newTrnDetails.quantity = txData.quantityAfterSplit;
+        newTrnDetails.price = txData.priceAfterSplit;
+        delete newTrnDetails._id;
+        delete newTrnDetails.id;
+        delete newTrnDetails.createdAt;
+        delete newTrnDetails.updatedAt;
+        const newTransaction = new Transaction(newTrnDetails);
+
+        holding.quantity = txData.quantityAfterSplit;
+        holding.price = txData.priceAfterSplit;
+
+        const [, savedNew] = await Promise.all([
+          txn.save({ session }),
+          newTransaction.save({ session })
+        ]);
+
+        // Re-link holding to the new transaction and rewrite txData so the
+        // splitHistory entry stores the post-split tx id.
+        txData.transactionId = savedNew._id;
+        holding.transactionId = savedNew._id;
+        await holding.save({ session });
+      } else {
+        // Branch C: tx.qty === quantityBeforeSplit === holding.qty (by invariant
+        // above). Move transaction and holding from pre-split to post-split
+        // values in lockstep.
+        txn.quantity = txData.quantityAfterSplit;
+        txn.price = txData.priceAfterSplit;
+        holding.quantity = txData.quantityAfterSplit;
+        holding.price = txData.priceAfterSplit;
+        await Promise.all([
+          txn.save({ session }),
+          holding.save({ session })
+        ]);
+      }
+    }
+
+    // Per-demat aggregate cross-check. Each Branch A submission passed its
+    // per-BUY check individually, but the sum across submissions for the same
+    // demat must still fit within the demat's total SELL history up to splitDate.
+    // Closes the gap where individual lots pass but their combined required
+    // SELL coverage exceeds what's ever been sold.
+    for (const [dematKey, totalRequired] of branchARequiredByDemat) {
+      const agg = await Transaction.aggregate([
+        { $match: {
+            securityId: new mongoose.Types.ObjectId(securityId),
+            dematAccountId: new mongoose.Types.ObjectId(dematKey),
+            type: 'SELL',
+            deliveryType: 'Delivery',
+            date: { $lt: new Date(splitDate) }
+        }},
+        { $group: { _id: null, total: { $sum: '$quantity' } } }
+      ]).session(session);
+      const aggregateSold = agg[0]?.total ?? 0;
+
+      if (totalRequired > aggregateSold) {
+        console.error(
+          `[processSplit] aggregate sell coverage missing: secId=${securityId} demId=${dematKey} required=${totalRequired} aggregateSold=${aggregateSold}`
+        );
+        const error = new Error(
+          'Cannot apply this split — the data across the selected lots is inconsistent. ' +
+          'Please refresh the page and try again. If the issue persists, contact support.'
+        );
+        error.statusCode = 409;
+        error.reasonCode = 'SELL_COVERAGE_MISSING';
+        throw error;
+      }
+    }
+
+    // Record the split event — merge into the existing entry for this
+    // (date, ratio) if one exists (e.g. user noticed a missed lot mid-process
+    // and re-submitted with new lots only), else push a fresh entry.
     if (existingSplitEntry) {
       existingSplitEntry.transactions.push(...transactions);
     } else {
       security.splitHistory.push({ splitDate, splitRatio, transactions });
     }
-
     await security.save({ session });
+
+    // Propagate the split through FY snapshots and re-derive Holdings for
+    // every affected demat from the now-correct transactions. Without this,
+    // any subsequent updateRecords call (transaction edit, ledger edit, etc.)
+    // would seed from a frozen pre-split snapshot and silently revert Holdings.
+    // Scoped to just the affected demats and anchored at the earliest affected
+    // BUY's date, so the rebuild is far cheaper than a full-history /ledger/fix.
+    for (const [dematKey, earliestDate] of earliestDateByDemat) {
+      await updateRecords(earliestDate, dematKey, session);
+    }
 
     await session.commitTransaction();
   } catch (error) {

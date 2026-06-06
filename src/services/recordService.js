@@ -3,6 +3,7 @@ const Holdings = require("../models/Holdings");
 const Transaction = require("../models/Transaction");
 const DematAccount = require("../models/DematAccount");
 const LedgerEntry = require("../models/LedgerEntry");
+const Security = require("../models/Security");
 
 const updateRecords = async (transactionDate, dematAccountId, session) => {
     try {
@@ -15,7 +16,9 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         }).session(session);
 
         if (!previousFinancialYear) {
-            const error = new Error('Previous Financial year for this transaction does not exist');
+            const prevDateStr = previousTransactionDate.toISOString().slice(0, 10);
+            console.error(`[updateRecords] no prev FY for transactionDate=${new Date(transactionDate).toISOString().slice(0,10)} (looking for FY containing ${prevDateStr})`);
+            const error = new Error('Cannot process this transaction — its date falls before the earliest configured financial year. Please add the missing financial year first and try again.');
             error.statusCode = 404;
             error.reasonCode = 'NOT_FOUND';
             throw error;
@@ -77,7 +80,16 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                         }
 
                         if (quantityToSell > 0) {
-                            const error = new Error('Not enough holdings to sell for transaction: ' + fyTransaction._id);
+                            const sec = await Security.findById(fyTransaction.securityId).session(session);
+                            const secName = sec?.name || 'Unknown security';
+                            const sellDateStr = new Date(fyTransaction.date).toISOString().slice(0, 10);
+                            const fulfilled = fyTransaction.quantity - quantityToSell;
+                            console.error(
+                                `[updateRecords] not enough holdings to sell: txId=${fyTransaction._id} secId=${fyTransaction.securityId} demId=${dematAccountId} sellQty=${fyTransaction.quantity} fulfilled=${fulfilled} shortfall=${quantityToSell}`
+                            );
+                            const error = new Error(
+                                `Cannot process SELL of ${fyTransaction.quantity} ${secName} on ${sellDateStr} — only ${fulfilled} shares available in this demat account for that security.`
+                            );
                             error.statusCode = 400;
                             error.reasonCode = 'NOT_ALLOWED';
                             throw error;

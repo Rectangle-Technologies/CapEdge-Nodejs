@@ -95,9 +95,12 @@ const validateTransaction = async (transactionData, session) => {
         Security.findById(transactionData.securityId).session(session)
     ]);
 
-    // Check if there is a split entry after the transaction date
-    console.log('Security Split History:', security.splitHistory);
-    console.log('Transaction Date:', transactionData);
+    if (!security) throwNotFoundError('Security not found');
+    if (!dematAccount) throwNotFoundError('Demat account not found');
+
+    // Reject if the security was split on or after this transaction's date —
+    // backdating a transaction across a recorded split would produce a holding
+    // whose qty/price doesn't match the split-adjusted ledger.
     const splitEntry = security.splitHistory.find(split => new Date(split.splitDate) > new Date(transactionData.date));
     if (splitEntry) {
         const splitDate = new Date(splitEntry.splitDate);
@@ -107,9 +110,6 @@ const validateTransaction = async (transactionData, session) => {
         error.reasonCode = 'BAD_REQUEST';
         throw error;
     }
-
-    if (!dematAccount) throwNotFoundError('Demat account not found');
-    if (!security) throwNotFoundError('Security not found');
 };
 
 const handleIntradayTransaction = async (transactionData, baseTransaction, session) => {
@@ -226,8 +226,19 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
                 await new Promise(resolve => setTimeout(resolve, 100 * attempt));
                 continue;
             }
-            
-            // If we've exhausted retries or it's not a transient error, throw
+
+            // Retries exhausted on a transient/session error — swap the raw
+            // Mongo driver text for a friendly user-facing message. Other
+            // unrecognized errors propagate as-is so legitimate business
+            // messages (e.g. "Cannot process SELL of...") still reach the UI.
+            if (isTransientError || isSessionCorruption) {
+                console.error(`[executeTransactionWithRetry] all retries exhausted: ${error.message}`);
+                const friendly = new Error('A temporary database issue prevented this operation. Please try again in a moment.');
+                friendly.statusCode = 503;
+                friendly.reasonCode = 'TRANSIENT_DB_ERROR';
+                throw friendly;
+            }
+
             throw error;
             
         } finally {

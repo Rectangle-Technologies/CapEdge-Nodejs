@@ -43,7 +43,9 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	}).session(session);
 
 	if (!prevFY) {
-		const error = new Error('Previous Financial year for this date does not exist');
+		const prevDateStr = prevYearDate.toISOString().slice(0, 10);
+		console.error(`[findOrCreateFinancialYear] no prev FY for date=${new Date(transactionDate).toISOString().slice(0,10)} (looking for FY containing ${prevDateStr})`);
+		const error = new Error('Cannot process this transaction — its date falls before the earliest configured financial year. Please add the missing financial year first and try again.');
 		error.statusCode = 404;
 		error.reasonCode = 'NOT_FOUND';
 		throw error;
