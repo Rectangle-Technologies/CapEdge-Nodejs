@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { toUTCDateOnly } = require('../utils/dateOnly');
 
 const transactionTypes = ['BUY', 'SELL'];
 const deliveryTypes = ['Delivery', 'Intraday'];
@@ -7,6 +8,7 @@ const transactionSchema = new mongoose.Schema({
   date: {
     type: Date,
     required: [true, 'Transaction date is required'],
+    set: toUTCDateOnly // calendar date — stored at UTC midnight (timezone-independent)
   },
   type: {
     type: String,

@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 const { SECURITY_TYPES_ARRAY, DERIVATIVE_TYPES } = require('../constants');
+const { toUTCDateOnly, todayIST } = require('../utils/dateOnly');
 
 // Schema for split history records
 const splitHistorySchema = new mongoose.Schema({
   splitDate: {
     type: Date,
-    required: true
+    required: true,
+    set: toUTCDateOnly // calendar date — stored at UTC midnight (timezone-independent)
   },
   splitRatio: {
     type: String, // e.g., "1:2" means 1 old share becomes 2 new shares
@@ -71,10 +73,12 @@ const securitySchema = new mongoose.Schema({
   },
   expiry: {
     type: Date,
+    set: toUTCDateOnly, // calendar date — stored at UTC midnight (timezone-independent)
     validate: {
       validator: function(value) {
         if (DERIVATIVE_TYPES.includes(this.type)) {
-          return value != null && value > new Date();
+          // date-only comparison: expiry must be today (IST) or later
+          return value != null && toUTCDateOnly(value) >= todayIST();
         }
         return value == null;
       },

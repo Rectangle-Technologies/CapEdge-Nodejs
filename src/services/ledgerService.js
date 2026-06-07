@@ -201,7 +201,7 @@ const addLedgerEntry = async (data) => {
     const ledgerEntry = await LedgerEntry.create([{
       dematAccountId,
       transactionAmount,
-      date,
+      date, // → UTC midnight via LedgerEntry model setter
       remarks
     }], { session });
 
@@ -336,7 +336,7 @@ const editLedgerEntry = async (entryId, data) => {
     const newEntry = await LedgerEntry.create([{
       dematAccountId,
       transactionAmount,
-      date: newDate,
+      date: newDate, // → UTC midnight via LedgerEntry model setter
       remarks
     }], { session });
 

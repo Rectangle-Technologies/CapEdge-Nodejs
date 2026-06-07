@@ -1,5 +1,6 @@
 const ExcelJS = require('exceljs');
 const Security = require('../models/Security');
+const { formatDMY } = require('../utils/dateOnly');
 
 const exportPnlToExcel = async (data, sheetName) => {
   const { startDate, endDate, ...securitiesData } = data;
@@ -13,13 +14,8 @@ const exportPnlToExcel = async (data, sheetName) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
-  // Helper to format date as dd/mm/yy using regex
-  const formatDate = (date) => {
-    if (!date) return '';
-    const isoString = date.toISOString();
-    const formattedDate = isoString.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1');
-    return formattedDate;
-  };
+  // DD/MM/YYYY from UTC parts (timezone-independent)
+  const formatDate = formatDMY;
   worksheet.mergeCells('A1:T1');
   worksheet.getCell('A1').value = `Period from: ${formatDate(startDate)} to ${formatDate(endDate)}`;
   worksheet.getCell('A3').value = 'Stock';
@@ -273,15 +269,8 @@ const exportHoldingsToExcel = async (data, sheetName) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
-  // Helper to format date as dd/mm/yyyy
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
+  // DD/MM/YYYY from UTC parts (timezone-independent)
+  const formatDate = formatDMY;
 
   // INR Currency format
   const inrFormat = '₹#,##0.00';
@@ -448,15 +437,8 @@ const exportLedgerToExcel = async (data, sheetName) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
-  // Helper to format date as dd/mm/yyyy
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
+  // DD/MM/YYYY from UTC parts (timezone-independent)
+  const formatDate = formatDMY;
 
   // INR Currency format
   const inrFormat = '₹#,##0.00';

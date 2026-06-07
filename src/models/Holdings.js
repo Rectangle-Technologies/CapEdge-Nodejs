@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
+const { toUTCDateOnly } = require('../utils/dateOnly');
 
 // Holdings represent current holdings (securities bought but not yet sold)
 const holdingsSchema = new mongoose.Schema({
   buyDate: {
     type: Date,
-    required: [true, 'Buy date is required']
+    required: [true, 'Buy date is required'],
+    set: toUTCDateOnly // calendar date — stored at UTC midnight (timezone-independent)
   },
   quantity: {
     type: Number,
