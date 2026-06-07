@@ -3,6 +3,7 @@ const { body, param, query } = require('express-validator');
 const transactionController = require('../controllers/transactionController');
 const { handleValidationErrors } = require('../middleware/validation');
 const contractUpload = require('../middleware/contractUpload');
+const { toUTCDateOnly, todayIST } = require('../utils/dateOnly');
 
 const router = express.Router();
 
@@ -18,9 +19,8 @@ const transactionValidation = [
     .isISO8601()
     .withMessage('Invalid date format')
     .custom((value) => {
-      const inputDate = new Date(value);
-      inputDate.setHours(0, 0, 0, 0);
-      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      const inputDate = toUTCDateOnly(value); // date-only compare; timezone-independent
+      const today = todayIST();
       if (inputDate > today) {
         throw new Error('Transaction date cannot be in the future');
       }
@@ -202,9 +202,8 @@ const editTransactionValidation = [
     .notEmpty().withMessage('Transaction date is required')
     .isISO8601().withMessage('Invalid date format')
     .custom((value) => {
-      const inputDate = new Date(value);
-      inputDate.setHours(0, 0, 0, 0);
-      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      const inputDate = toUTCDateOnly(value); // date-only compare; timezone-independent
+      const today = todayIST();
       if (inputDate > today) throw new Error('Transaction date cannot be in the future');
       return true;
     }),
@@ -270,9 +269,8 @@ const editContractValidation = [
     .notEmpty().withMessage('Transaction date is required')
     .isISO8601().withMessage('Invalid date format')
     .custom((value) => {
-      const inputDate = new Date(value);
-      inputDate.setHours(0, 0, 0, 0);
-      const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      const inputDate = toUTCDateOnly(value); // date-only compare; timezone-independent
+      const today = todayIST();
       if (inputDate > today) throw new Error('Transaction date cannot be in the future');
       return true;
     }),

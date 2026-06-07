@@ -4,6 +4,7 @@ const Holdings = require('../models/Holdings');
 const { DERIVATIVE_TYPES, NON_DERIVATIVE_TYPES, SECURITY_TYPES_ARRAY } = require('../constants');
 const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
+const { toUTCDateOnly, utcDayKey } = require('../utils/dateOnly');
 
 /**
  * Security Service
@@ -251,7 +252,10 @@ const processSplit = async (payload) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { securityId, splitDate, splitRatio, transactions } = payload;
+    const { securityId, splitRatio, transactions } = payload;
+    // normalize once so every comparison/query/day-key below is date-only (the
+    // model setter also normalizes splitDate on save).
+    const splitDate = toUTCDateOnly(payload.splitDate);
 
     const security = await Security.findById(securityId).session(session);
     if (!security) {
@@ -264,7 +268,7 @@ const processSplit = async (payload) => {
     const latestTransaction = await Transaction.findOne({ securityId })
       .sort({ date: -1 })
       .session(session);
-    if (latestTransaction && new Date(splitDate) < latestTransaction.date) {
+    if (latestTransaction && splitDate < latestTransaction.date) {
       const error = new Error('Split date cannot be before the latest transaction date for this security');
       error.statusCode = 400;
       error.reasonCode = 'BAD_REQUEST';
@@ -275,10 +279,10 @@ const processSplit = async (payload) => {
     // (same calendar day + same ratio). Multiple distinct splits over the
     // security's life (different dates or different ratios) remain allowed —
     // the same lot legitimately participates in each.
-    const sameDayKey = new Date(splitDate).toISOString().split('T')[0];
+    const sameDayKey = utcDayKey(splitDate); // both sides are UTC-midnight → exact day compare
     const existingSplitEntry = security.splitHistory.find(
       s => s.splitRatio === splitRatio &&
-           new Date(s.splitDate).toISOString().split('T')[0] === sameDayKey
+           utcDayKey(s.splitDate) === sameDayKey
     );
     if (existingSplitEntry) {
       const alreadySplitIds = new Set(
@@ -474,7 +478,7 @@ const processSplit = async (payload) => {
     if (existingSplitEntry) {
       existingSplitEntry.transactions.push(...transactions);
     } else {
-      security.splitHistory.push({ splitDate, splitRatio, transactions });
+      security.splitHistory.push({ splitDate, splitRatio, transactions }); // splitDate → UTC midnight via setter
     }
     await security.save({ session });
 

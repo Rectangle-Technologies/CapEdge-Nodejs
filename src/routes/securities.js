@@ -3,6 +3,7 @@ const { body, param, query } = require('express-validator');
 const securityController = require('../controllers/securityController');
 const { SECURITY_TYPES_ARRAY } = require('../constants');
 const { handleValidationErrors } = require('../middleware/validation');
+const { toUTCDateOnly, todayIST } = require('../utils/dateOnly');
 
 const router = express.Router();
 
@@ -47,10 +48,8 @@ const splitValidation = [
     .isISO8601()
     .withMessage('Split date must be a valid ISO 8601 date format')
     .custom((value) => {
-      const splitDate = new Date(value);
-      const today = new Date();
-      today.setHours(23, 59, 59, 999); // End of today
-      if (splitDate > today) {
+      // date-only compare; today = Indian calendar date (timezone-independent)
+      if (toUTCDateOnly(value) > todayIST()) {
         throw new Error('Split date cannot be a future date');
       }
       return true;

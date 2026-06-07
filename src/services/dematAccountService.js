@@ -6,6 +6,7 @@ const LedgerEntry = require('../models/LedgerEntry');
 const Holdings = require('../models/Holdings');
 const FinancialYear = require('../models/FinancialYear');
 const { addLedgerEntry } = require('./ledgerService');
+const { todayIST } = require('../utils/dateOnly');
 
 /**
  * Demat Account Service
@@ -105,12 +106,10 @@ const createDematAccount = async (accountData) => {
 
   // Add a ledger entry for initial balance if balance > 0
   if (parseFloat(balance) > 0) {
-    const today = new Date();
-    const todayMidnightUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
     await addLedgerEntry({
       dematAccountId: dematAccount._id,
       transactionAmount: parseFloat(balance),
-      date: todayMidnightUTC,
+      date: todayIST(), // opening balance dated to today's Indian calendar date (UTC midnight)
       remarks: 'Opening balance'
     });
   }

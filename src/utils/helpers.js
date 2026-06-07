@@ -120,13 +120,15 @@ const getPaginationValues = (query) => {
 };
 
 const getGainType = (buyDate, sellDate) => {
-  const buyYear = buyDate.getFullYear();
-  const sellYear = sellDate.getFullYear();
+  // UTC parts: dates are stored at UTC midnight, so the holding-period boundary
+  // is computed timezone-independently (no LTCG/STCG drift across servers).
+  const buyYear = buyDate.getUTCFullYear();
+  const sellYear = sellDate.getUTCFullYear();
   if (sellYear - buyYear > 1) {
     return 'LTCG';
   } else if (sellYear - buyYear === 1) {
-    if (sellDate.getMonth() > buyDate.getMonth() || 
-        (sellDate.getMonth() === buyDate.getMonth() && sellDate.getDate() >= buyDate.getDate())) {
+    if (sellDate.getUTCMonth() > buyDate.getUTCMonth() ||
+        (sellDate.getUTCMonth() === buyDate.getUTCMonth() && sellDate.getUTCDate() >= buyDate.getUTCDate())) {
       return 'LTCG';
     }
   }

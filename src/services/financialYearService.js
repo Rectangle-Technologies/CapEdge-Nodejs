@@ -36,7 +36,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 
 	// Check if prev FY exists
 	const prevYearDate = new Date(transactionDate);
-	prevYearDate.setFullYear(prevYearDate.getFullYear() - 1);
+	prevYearDate.setUTCFullYear(prevYearDate.getUTCFullYear() - 1); // UTC: stay on the same calendar day a year earlier
 	const prevFY = await FinancialYear.findOne({
 		startDate: { $lte: prevYearDate },
 		endDate: { $gte: prevYearDate }
@@ -114,12 +114,14 @@ const  createFinancialYear = async (data, session = null) => {
 		throw error;
 	}
 
-	const year = date.getFullYear();
-	const month = date.getMonth();
+	// UTC parts: derive the FY from the date's UTC calendar day (timezone-independent)
+	const year = date.getUTCFullYear();
+	const month = date.getUTCMonth();
 
 	const fyStartYear = month < 3 ? year - 1 : year;
 
 	const financialYear = new FinancialYear({
+		// start/end → UTC midnight / end-of-day via FinancialYear model setters
 		startDate: new Date(Date.UTC(fyStartYear, 3, 1, 0, 0, 0, 0)), // April 1st
 		endDate: new Date(Date.UTC(fyStartYear + 1, 2, 31, 23, 59, 59, 999)), // March 31st
 		stcgRate: stcgRate,
@@ -141,8 +143,9 @@ const updateFinancialYear = async (id, data) => {
 		throw error;
 	}
 
-	financialYear.startDate = new Date(Date.UTC(data.startDate.getFullYear(), data.startDate.getMonth(), data.startDate.getDate(), 0, 0, 0, 0));
-	financialYear.endDate = new Date(Date.UTC(data.endDate.getFullYear(), data.endDate.getMonth(), data.endDate.getDate(), 23, 59, 59, 999));
+	// start/end → UTC midnight / end-of-day via FinancialYear model setters
+	financialYear.startDate = data.startDate;
+	financialYear.endDate = data.endDate;
 	financialYear.stcgRate = data.stcgRate / 100;
 	financialYear.ltcgRate = data.ltcgRate / 100;
 	financialYear.intradayRate = data.intradayRate / 100;

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { holdingsSchema } = require('./Holdings');
+const { toUTCDateOnly, endOfUTCDay } = require('../utils/dateOnly');
 
 const reportSchema = new mongoose.Schema({
   holdings: [holdingsSchema],
@@ -23,11 +24,13 @@ const financialYearSchema = new mongoose.Schema({
   startDate: {
     type: Date,
     required: [true, 'Start date is required'],
-    index: true
+    index: true,
+    set: toUTCDateOnly // FY start — first instant of the calendar day (UTC midnight)
   },
   endDate: {
     type: Date,
     required: [true, 'End date is required'],
+    set: endOfUTCDay, // FY end — inclusive last instant of the calendar day (Option A)
     validate: {
       validator: function (value) {
         return value > this.startDate;

@@ -9,7 +9,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
     try {
         // Fetch the previous financial year
         const previousTransactionDate = new Date(transactionDate);
-        previousTransactionDate.setFullYear(previousTransactionDate.getFullYear() - 1);
+        previousTransactionDate.setUTCFullYear(previousTransactionDate.getUTCFullYear() - 1); // UTC: same calendar day, a year earlier
         const previousFinancialYear = await FinancialYear.findOne({
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
@@ -53,7 +53,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 if (fyTransaction.type === 'BUY') {
                     if (fyTransaction.deliveryType === 'Delivery') {
                         holdings.push({
-                            buyDate: fyTransaction.date,
+                            buyDate: fyTransaction.date, // → UTC midnight via Holdings model setter
                             quantity: fyTransaction.quantity,
                             price: fyTransaction.price,
                             transactionCost: fyTransaction.transactionCost || 0,
@@ -141,7 +141,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
 
         // Re-insert updated holdings into the Holdings collection
         const holdingsToInsert = previousHoldings.map(h => ({
-            buyDate: h.buyDate,
+            buyDate: h.buyDate, // → UTC midnight via Holdings model setter (insertMany)
             quantity: h.quantity,
             price: h.price,
             securityId: h.securityId,

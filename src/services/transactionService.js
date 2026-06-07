@@ -8,6 +8,7 @@ const { findOrCreateFinancialYear } = require('./financialYearService');
 const mongoose = require('mongoose');
 const { updateRecords } = require('./recordService');
 const { created } = require('../utils/response');
+const { toUTCDateOnly, endOfUTCDay, formatDMY } = require('../utils/dateOnly');
 
 const getTransactions = async (filters = {}) => {
     const { startDate, endDate, type, securityId, dematAccountId, limit, pageNo = 1, financialYearId } = filters;
@@ -103,8 +104,7 @@ const validateTransaction = async (transactionData, session) => {
     // whose qty/price doesn't match the split-adjusted ledger.
     const splitEntry = security.splitHistory.find(split => new Date(split.splitDate) > new Date(transactionData.date));
     if (splitEntry) {
-        const splitDate = new Date(splitEntry.splitDate);
-        const formattedDate = `${splitDate.getDate().toString().padStart(2, '0')}/${(splitDate.getMonth() + 1).toString().padStart(2, '0')}/${splitDate.getFullYear()}`;
+        const formattedDate = formatDMY(splitEntry.splitDate); // DD/MM/YYYY from UTC parts
         const error = new Error(`Cannot add transaction for ${security.name} as it was split on ${formattedDate}`);
         error.statusCode = 400;
         error.reasonCode = 'BAD_REQUEST';
@@ -153,7 +153,7 @@ const createTransaction = async (transactionData, session) => {
     const financialYear = await findOrCreateFinancialYear(transactionDate, session);
 
     const baseTransaction = {
-        date: transactionDate,
+        date: transactionDate, // → UTC midnight via Transaction model setter
         securityId: transactionData.securityId,
         deliveryType: transactionData.deliveryType,
         dematAccountId: transactionData.dematAccountId,
@@ -503,11 +503,8 @@ const getContracts = async (filters = {}) => {
     if (dematAccountId) baseMatch.dematAccountId = new mongoose.Types.ObjectId(dematAccountId);
     if (referenceNumber) baseMatch.referenceNumber = { $regex: referenceNumber, $options: 'i' };
     if (date) {
-        const start = new Date(date);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(date);
-        end.setHours(23, 59, 59, 999);
-        baseMatch.date = { $gte: start, $lte: end };
+        // match the whole UTC calendar day (timezone-independent, no local setHours)
+        baseMatch.date = { $gte: toUTCDateOnly(date), $lte: endOfUTCDay(date) };
     }
 
     // Stage 1: find candidate referenceNumbers, optionally filtered by securityId,

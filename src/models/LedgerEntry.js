@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { toUTCDateOnly } = require('../utils/dateOnly');
 
 const ledgerEntrySchema = new mongoose.Schema({
   dematAccountId: {
@@ -21,6 +22,7 @@ const ledgerEntrySchema = new mongoose.Schema({
   date: {
     type: Date,
     required: [true, 'Date is required'],
+    set: toUTCDateOnly // calendar date — stored at UTC midnight (timezone-independent)
   },
   remarks: {
     type: String,
