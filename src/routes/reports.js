@@ -30,9 +30,13 @@ const ledgerQueryValidation = [
 router.post('/pnl', pnlValidation, handleValidationErrors, validateFinancialYearAccess, reportController.getPnLData);
 router.post('/pnl/export', pnlValidation, handleValidationErrors, validateFinancialYearAccess, reportController.exportPnLReport);
 
-// All holdings Report Routes
-router.get('/holdings/export', validateFinancialYearAccess, reportController.exportHoldingsReport);
-router.get('/holdings/export/summary', validateFinancialYearAccess, reportController.exportHoldingsSummaryReport);
+// All holdings Report Routes (dematAccountId optional: restricts export to one demat account)
+const holdingsExportValidation = [
+  query('dematAccountId').optional().isMongoId().withMessage('Invalid Demat Account ID')
+];
+
+router.get('/holdings/export', holdingsExportValidation, handleValidationErrors, validateFinancialYearAccess, reportController.exportHoldingsReport);
+router.get('/holdings/export/summary', holdingsExportValidation, handleValidationErrors, validateFinancialYearAccess, reportController.exportHoldingsSummaryReport);
 
 // Ledger
 router.get('/ledger/export/:dematAccountId', ledgerQueryValidation, handleValidationErrors, reportController.exportLedgerReport);

@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const DematAccount = require("../models/DematAccount");
 const FinancialYear = require("../models/FinancialYear");
 const Holdings = require("../models/Holdings");
@@ -188,7 +189,7 @@ const getPnLRecords = async (data) => {
  * @param {String} financialYearId - The financial year ID to fetch from
  * @returns {Promise<Array>} - Structured holdings data
  */
-const getHoldingsRecordsFromReport = async (financialYearId) => {
+const getHoldingsRecordsFromReport = async (financialYearId, dematAccountId) => {
   // Fetch the financial year with its reports
   const financialYear = await FinancialYear.findById(financialYearId).lean();
   
@@ -198,7 +199,9 @@ const getHoldingsRecordsFromReport = async (financialYearId) => {
 
   // Collect all holdings from all demat accounts in the reports
   const allHoldings = [];
-  const dematAccountIds = Object.keys(financialYear.reports);
+  const dematAccountIds = dematAccountId
+    ? [dematAccountId.toString()]
+    : Object.keys(financialYear.reports);
 
   for (const dematId of dematAccountIds) {
     const report = financialYear.reports[dematId];
@@ -321,7 +324,7 @@ const getHoldingsRecordsFromReport = async (financialYearId) => {
   return result;
 };
 
-const getHoldingsRecords = async (financialYearId) => {
+const getHoldingsRecords = async (financialYearId, dematAccountId) => {
   // Determine whether to fetch from Holdings collection or FinancialYear report
   let shouldFetchFromCollection = true;
 
@@ -340,11 +343,16 @@ const getHoldingsRecords = async (financialYearId) => {
 
   if (!shouldFetchFromCollection) {
     // Fetch from FinancialYear report (historical data)
-    return await getHoldingsRecordsFromReport(financialYearId);
+    return await getHoldingsRecordsFromReport(financialYearId, dematAccountId);
   }
 
   // Fetch from Holdings collection (current/latest financial year)
   const result = await Holdings.aggregate([
+    // Optionally restrict to a single demat account
+    ...(dematAccountId
+      ? [{ $match: { dematAccountId: new mongoose.Types.ObjectId(dematAccountId) } }]
+      : []),
+
     // Join with Security
     {
       $lookup: {

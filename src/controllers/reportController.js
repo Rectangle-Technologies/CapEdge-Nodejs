@@ -41,9 +41,9 @@ const exportPnLReport = async (req, res, next) => {
 
 const exportHoldingsReport = async (req, res, next) => {
   try {
-    const { financialYearId } = req.query;
+    const { financialYearId, dematAccountId } = req.query;
 
-    const result = await reportService.getHoldingsRecords(financialYearId);
+    const result = await reportService.getHoldingsRecords(financialYearId, dematAccountId);
     const buffer = await exportService.exportHoldingsToExcel(result, 'Holdings_Report.xlsx');
 
     res.setHeader('Content-Disposition', 'attachment; filename="Holdings_Report.xlsx"');
@@ -57,9 +57,9 @@ const exportHoldingsReport = async (req, res, next) => {
 
 const exportHoldingsSummaryReport = async (req, res, next) => {
   try {
-    const { financialYearId } = req.query;
+    const { financialYearId, dematAccountId } = req.query;
 
-    const result = await reportService.getHoldingsRecords(financialYearId);
+    const result = await reportService.getHoldingsRecords(financialYearId, dematAccountId);
     const buffer = await exportService.exportHoldingsSummaryToExcel(result, 'Holdings_Summary.xlsx');
 
     res.setHeader('Content-Disposition', 'attachment; filename="Holdings_Summary.xlsx"');
