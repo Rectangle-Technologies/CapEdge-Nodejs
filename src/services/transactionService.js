@@ -91,10 +91,12 @@ const throwNotFoundError = (message) => {
 };
 
 const validateTransaction = async (transactionData, session) => {
-    const [dematAccount, security] = await Promise.all([
-        DematAccount.findById(transactionData.dematAccountId).session(session),
-        Security.findById(transactionData.securityId).session(session)
-    ]);
+    // Run these one after the other: MongoDB does not support concurrent operations on a
+    // single transaction session. As the first operations of the transaction they race to
+    // start it, and about half of all attempts failed with a TransientTransactionError
+    // ("Given transaction number ... does not match any in-progress transactions").
+    const dematAccount = await DematAccount.findById(transactionData.dematAccountId).session(session);
+    const security = await Security.findById(transactionData.securityId).session(session);
 
     if (!security) throwNotFoundError('Security not found');
     if (!dematAccount) throwNotFoundError('Demat account not found');
