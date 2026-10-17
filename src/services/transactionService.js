@@ -90,13 +90,32 @@ const throwNotFoundError = (message) => {
     throw error;
 };
 
-const validateTransaction = async (transactionData, session) => {
+/**
+ * Per-attempt cache of reference data that createTransaction reads once per trade. A contract of N trades used
+ * to cost N lookups of the same demat account, security and financial year; with the cache it costs one each.
+ *
+ * Safe because none of these are written while trades are being created (the demat balance is only updated by
+ * updateRecords after the last trade) and validation only reads existence and the security's split history.
+ * Create a NEW cache inside every executeTransactionWithRetry callback: cached documents belong to that
+ * attempt's session and must not be reused after an abort.
+ */
+const createLookupCache = () => ({ demats: new Map(), securities: new Map(), financialYears: [] });
+
+const cachedLookup = async (cache, id, load) => {
+    const key = String(id);
+    if (!cache.has(key)) cache.set(key, await load());
+    return cache.get(key);
+};
+
+const validateTransaction = async (transactionData, session, lookups) => {
     // Run these one after the other: MongoDB does not support concurrent operations on a
     // single transaction session. As the first operations of the transaction they race to
     // start it, and about half of all attempts failed with a TransientTransactionError
     // ("Given transaction number ... does not match any in-progress transactions").
-    const dematAccount = await DematAccount.findById(transactionData.dematAccountId).session(session);
-    const security = await Security.findById(transactionData.securityId).session(session);
+    const dematAccount = await cachedLookup(lookups.demats, transactionData.dematAccountId,
+        () => DematAccount.findById(transactionData.dematAccountId).session(session));
+    const security = await cachedLookup(lookups.securities, transactionData.securityId,
+        () => Security.findById(transactionData.securityId).session(session));
 
     if (!security) throwNotFoundError('Security not found');
     if (!dematAccount) throwNotFoundError('Demat account not found');
@@ -148,11 +167,11 @@ const handleDeliveryTransaction = async (transactionData, baseTransaction, sessi
     return [transaction];
 };
 
-const createTransaction = async (transactionData, session) => {
-    await validateTransaction(transactionData, session);
+const createTransaction = async (transactionData, session, lookups = createLookupCache()) => {
+    await validateTransaction(transactionData, session, lookups);
 
     const transactionDate = new Date(transactionData.date);
-    const financialYear = await findOrCreateFinancialYear(transactionDate, session);
+    const financialYear = await findOrCreateFinancialYear(transactionDate, session, lookups.financialYears);
 
     const baseTransaction = {
         date: transactionDate, // → UTC midnight via Transaction model setter
@@ -258,9 +277,10 @@ const createTransactions = async (transactions) => {
     // Execute with retry logic
     return await executeTransactionWithRetry(async (session) => {
         const result = [];
+        const lookups = createLookupCache();
 
         for (const txData of transactions) {
-            const txResult = await createTransaction(txData, session);
+            const txResult = await createTransaction(txData, session, lookups);
             result.push(...txResult);
         }
 
@@ -383,7 +403,7 @@ const editTransaction = async (transactionId, newTransactionData) => {
         await _deleteTransactionLogic(transactionId, session);
 
         // Step 2: Create the new transaction record(s) with the updated data.
-        const newTxs = await createTransaction(newTransactionData, session);
+        const newTxs = await createTransaction(newTransactionData, session, createLookupCache());
 
         // Step 3: Create a bundled ledger entry for non-IPO trades (mirrors
         // the logic in createTransactions).
@@ -453,8 +473,9 @@ const editContract = async (referenceNumber, dematAccountId, transactions) => {
 
         // Step 3: Create all new transactions (only Transaction documents — no ledger, no updateRecords)
         const result = [];
+        const lookups = createLookupCache();
         for (const txData of transactions) {
-            const txResult = await createTransaction(txData, session);
+            const txResult = await createTransaction(txData, session, lookups);
             result.push(...txResult);
         }
 

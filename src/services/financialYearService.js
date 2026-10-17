@@ -21,9 +21,20 @@ const getFinancialYears = async (filters) => {
 
 /**
  * Find existing Financial Year or create a new one for the transaction date
+ *
+ * `knownYears` is an optional per-request list the caller passes in so that several trades falling in the
+ * same financial year (for example the trades of one contract) cost one lookup instead of one per trade.
+ * Every year this function finds or creates is added to it. The list must only live as long as the
+ * database session it was filled under.
  * @private
  */
-const findOrCreateFinancialYear = async (transactionDate, session) => {
+const findOrCreateFinancialYear = async (transactionDate, session, knownYears = null) => {
+	// Reuse a year already resolved in this request (the same range check the query below performs)
+	const known = knownYears && knownYears.find(fy => fy.startDate <= transactionDate && fy.endDate >= transactionDate);
+	if (known) {
+		return known;
+	}
+
 	// Find FY that contains this date
 	let financialYear = await FinancialYear.findOne({
 		startDate: { $lte: transactionDate },
@@ -31,6 +42,7 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	}).session(session);
 
 	if (!!financialYear) {
+		if (knownYears) knownYears.push(financialYear);
 		return financialYear;
 	}
 
@@ -95,7 +107,8 @@ const findOrCreateFinancialYear = async (transactionDate, session) => {
 	
 	// Save once after all updates
 	await prevFY.save({ session });
-	
+
+	if (knownYears) knownYears.push(currentFY);
 	return currentFY;
 };
 
