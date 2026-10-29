@@ -14,7 +14,9 @@ const getFinancialYears = async (filters) => {
 		];
 	}
 
-	const financialYears = await FinancialYear.find(query).sort({ startDate: -1 });
+	// `reports` holds the per-demat holdings snapshots of every year (megabytes in total once the full
+	// history is loaded) and no screen reads it from this list, so it is left out of the response
+	const financialYears = await FinancialYear.find(query).select('-reports').sort({ startDate: -1 });
 	return financialYears;
 };
 
