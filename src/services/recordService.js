@@ -6,6 +6,13 @@ const LedgerEntry = require("../models/LedgerEntry");
 const Security = require("../models/Security");
 
 const updateRecords = async (transactionDate, dematAccountId, session) => {
+    // Timing only (logged once in `finally`): where a slow rebuild spends its time. Each lap() adds the time since
+    // the previous lap to one bucket, so the bucket of a database call includes the small in-memory work before it.
+    const startedAt = Date.now();
+    const spent = { reads: 0, ledgerWrites: 0, yearSaves: 0, holdings: 0 };
+    let mark = startedAt;
+    const lap = (bucket) => { const now = Date.now(); spent[bucket] += now - mark; mark = now; };
+    let yearsRebuilt = 0;
     try {
         // Fetch the previous financial year
         const previousTransactionDate = new Date(transactionDate);
@@ -14,6 +21,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
         }).session(session);
+        lap('reads');
 
         if (!previousFinancialYear) {
             const prevDateStr = previousTransactionDate.toISOString().slice(0, 10);
@@ -32,13 +40,16 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
         }).sort({ startDate: 1 }).session(session);
+        lap('reads');
 
         for (let financialYear of financialYearsToUpdate) {
+            yearsRebuilt++;
             // Fetch transactions for the FY
             const fyTransactions = await Transaction.find({
                 dematAccountId: dematAccountId,
                 financialYearId: financialYear._id
             }).sort({ date: 1 }).session(session);
+            lap('reads');
 
             // Update the opening balance of the FY
             let openingBalance = previousClosingBalance || 0;
@@ -102,13 +113,18 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 dematAccountId: dematAccountId,
                 date: { $gte: financialYear.startDate, $lte: financialYear.endDate }
             }).sort({ date: 1, createdAt: 1, _id: 1 }).session(session);
+            lap('reads');
 
             // Compute running balance for every entry (trade-linked or not) and
             // collect bulk updates. Each ledger entry — including those auto-
             // created from trades — contributes to closingBalance exactly once.
+            // Only entries whose stored balance differs are written (a missing/null
+            // balance counts as different): a rebuild that changes no cash, such as a
+            // stock split, would otherwise rewrite every balance with the same value.
             const balanceBulkOps = [];
             for (let entry of ledgerEntries) {
                 closingBalance += entry.transactionAmount;
+                if (entry.balanceAfterEntry === closingBalance) continue;
                 balanceBulkOps.push({
                     updateOne: {
                         filter: { _id: entry._id },
@@ -119,6 +135,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
 
             if (balanceBulkOps.length > 0) {
                 await LedgerEntry.bulkWrite(balanceBulkOps, { session });
+                lap('ledgerWrites');
             }
 
             // Update the report for the financial year
@@ -132,6 +149,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             previousHoldings = holdings;
             previousClosingBalance = closingBalance;
             await financialYear.save({ session });
+            lap('yearSaves');
         }
 
         // Delete holdings with matching dematAccountId from DB
@@ -162,10 +180,15 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         // Clear reports map to free memory
         latestFY.reports = new Map();
         await latestFY.save({ session });
+        lap('holdings');
 
     } catch (error) {
         console.error('Error updating records for transaction:', error);
         throw error;
+    } finally {
+        const from = new Date(transactionDate);
+        console.log(`[updateRecords] demat=${dematAccountId} from=${Number.isNaN(+from) ? 'invalid' : from.toISOString().slice(0, 10)} years=${yearsRebuilt} total=${Date.now() - startedAt}ms ` +
+            `reads=${spent.reads}ms ledgerWrites=${spent.ledgerWrites}ms yearSaves=${spent.yearSaves}ms holdings=${spent.holdings}ms`);
     }
 }
 
