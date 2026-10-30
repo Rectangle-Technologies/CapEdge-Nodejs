@@ -194,12 +194,17 @@ const createTransaction = async (transactionData, session, lookups = createLooku
  * - Network issues or temporary MongoDB unavailability
  * - Lock timeouts or write conflicts
  */
+// Atlas aborts a transaction that runs longer than its limit (60 s by default) and then answers NoSuchTransaction (code 251).
+// A retry repeats the same work and is cut off the same way, so an attempt that ran this long is not retried.
+const TRANSACTION_TOO_LONG_MS = 50000;
+
 const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => {
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         // Create a NEW session for each attempt to avoid session corruption
         const session = await mongoose.startSession();
+        const attemptStartedAt = Date.now();
         
         try {
             session.startTransaction({
@@ -240,6 +245,15 @@ const executeTransactionWithRetry = async (transactionLogic, maxRetries = 3) => 
                 throw error;
             }
             
+            // The database cut the transaction off for running too long: retrying cannot help
+            if (error.code === 251 && Date.now() - attemptStartedAt >= TRANSACTION_TOO_LONG_MS) {
+                console.error(`[executeTransactionWithRetry] transaction aborted after ${Date.now() - attemptStartedAt} ms (database time limit), not retrying`);
+                const tooLong = new Error('This change touches too much history to finish in time, so it was not saved. Please contact support.');
+                tooLong.statusCode = 503;
+                tooLong.reasonCode = 'TRANSACTION_TOO_LONG';
+                throw tooLong;
+            }
+
             // Retry on transient errors or session corruption
             if ((isTransientError || isSessionCorruption) && attempt < maxRetries) {
                 console.log(`Transient error detected, retrying with fresh session...`);
@@ -696,5 +710,6 @@ module.exports = {
     deleteTransaction,
     editTransaction,
     editContract,
-    deleteContract
+    deleteContract,
+    executeTransactionWithRetry
 };
