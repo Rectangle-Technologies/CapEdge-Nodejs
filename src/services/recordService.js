@@ -4,6 +4,8 @@ const Transaction = require("../models/Transaction");
 const DematAccount = require("../models/DematAccount");
 const LedgerEntry = require("../models/LedgerEntry");
 const Security = require("../models/Security");
+const { Types: { ObjectId } } = require("mongoose");
+const { toUTCDateOnly } = require("../utils/dateOnly");
 
 const updateRecords = async (transactionDate, dematAccountId, session) => {
     // Timing only (logged once in `finally`): where a slow rebuild spends its time. Each lap() adds the time since
@@ -14,7 +16,9 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
     const lap = (bucket) => { const now = Date.now(); spent[bucket] += now - mark; mark = now; };
     let yearsRebuilt = 0;
     // Each year holds the snapshots of EVERY demat (about 0.5 MB in total); a rebuild only needs this demat's
-    // own snapshot, so only that part of the report is read from the database
+    // own snapshot, so only that part of the report is read from the database. The years are read as plain
+    // objects and this demat's snapshot is written back with a direct update: building and saving Mongoose
+    // documents holding ~900 holdings per year was the bulk of the rebuild time.
     const dematKey = String(dematAccountId);
     const yearProjection = { startDate: 1, endDate: 1, [`reports.${dematKey}`]: 1 };
     try {
@@ -24,7 +28,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         const previousFinancialYear = await FinancialYear.findOne({
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
-        }, yearProjection).session(session);
+        }, yearProjection).lean().session(session);
         lap('reads');
 
         if (!previousFinancialYear) {
@@ -36,15 +40,16 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             throw error;
         }
 
-        var previousHoldings = previousFinancialYear.reports.get(dematKey)?.holdings || [];
-        var previousClosingBalance = previousFinancialYear.reports.get(dematKey)?.closingBalance || 0;
+        var previousHoldings = previousFinancialYear.reports?.[dematKey]?.holdings || [];
+        var previousClosingBalance = previousFinancialYear.reports?.[dematKey]?.closingBalance || 0;
         var latestFY;
 
         // Fetch all the FY including and after the transaction date, sorted chronologically
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
-        }, yearProjection).sort({ startDate: 1 }).session(session);
+        }, yearProjection).sort({ startDate: 1 }).lean().session(session);
         lap('reads');
+        const now = new Date();
 
         for (let financialYear of financialYearsToUpdate) {
             yearsRebuilt++;
@@ -67,15 +72,20 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             for (let fyTransaction of fyTransactions) {
                 if (fyTransaction.type === 'BUY') {
                     if (fyTransaction.deliveryType === 'Delivery') {
+                        // plain object stored as is: the id, timestamps and date normalisation a Mongoose sub-document
+                        // would have added are set here (the id is generated once, here, and travels with the holding)
                         holdings.push({
-                            buyDate: fyTransaction.date, // → UTC midnight via Holdings model setter
+                            _id: new ObjectId(),
+                            buyDate: toUTCDateOnly(fyTransaction.date),
                             quantity: fyTransaction.quantity,
                             price: fyTransaction.price,
                             transactionCost: fyTransaction.transactionCost || 0,
                             securityId: fyTransaction.securityId,
                             transactionId: fyTransaction._id,
                             dematAccountId: fyTransaction.dematAccountId,
-                            financialYearId: financialYear._id
+                            financialYearId: financialYear._id,
+                            createdAt: now,
+                            updatedAt: now
                         });
                     }
                 } else if (fyTransaction.type === 'SELL') {
@@ -142,17 +152,19 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 lap('ledgerWrites');
             }
 
-            // Update the report for the financial year
-            financialYear.reports.set(dematKey, {
-                holdings,
-                openingBalance,
-                closingBalance
-            });
-
             latestFY = financialYear;
             previousHoldings = holdings;
             previousClosingBalance = closingBalance;
-            await financialYear.save({ session });
+
+            // Update the report for the financial year (only this demat's snapshot is touched).
+            // The update is awaited before the next year changes `holdings` in place: the driver serialises the
+            // object when it is called, so each year stores its own state. Do not pipeline or batch these updates
+            // without copying `holdings` first.
+            await FinancialYear.collection.updateOne(
+                { _id: financialYear._id },
+                { $set: { [`reports.${dematKey}`]: { holdings, openingBalance, closingBalance, _id: new ObjectId() }, updatedAt: new Date() } },
+                { session }
+            );
             lap('yearSaves');
         }
 
@@ -182,8 +194,11 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         await Holdings.insertMany(holdingsToInsert, { session });
 
         // Clear reports map to free memory
-        latestFY.reports = new Map();
-        await latestFY.save({ session });
+        await FinancialYear.collection.updateOne(
+            { _id: latestFY._id },
+            { $set: { reports: {}, updatedAt: new Date() } },
+            { session }
+        );
         lap('holdings');
 
     } catch (error) {
