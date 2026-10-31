@@ -15,12 +15,14 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
     let mark = startedAt;
     const lap = (bucket) => { const now = Date.now(); spent[bucket] += now - mark; mark = now; };
     let yearsRebuilt = 0;
-    // Each year holds the snapshots of EVERY demat (about 0.5 MB in total); a rebuild only needs this demat's
-    // own snapshot, so only that part of the report is read from the database. The years are read as plain
+    // Each year holds the snapshots of EVERY demat (about 0.5 MB in total). A rebuild only needs this demat's
+    // snapshot of the year BEFORE the first rebuilt one; the rebuilt years' own snapshots are overwritten, so
+    // only their dates are read. The years are read as plain
     // objects and this demat's snapshot is written back with a direct update: building and saving Mongoose
     // documents holding ~900 holdings per year was the bulk of the rebuild time.
     const dematKey = String(dematAccountId);
-    const yearProjection = { startDate: 1, endDate: 1, [`reports.${dematKey}`]: 1 };
+    const yearDates = { startDate: 1, endDate: 1 };
+    const previousYearProjection = { ...yearDates, [`reports.${dematKey}`]: 1 };
     try {
         // Fetch the previous financial year
         const previousTransactionDate = new Date(transactionDate);
@@ -28,7 +30,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         const previousFinancialYear = await FinancialYear.findOne({
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
-        }, yearProjection).lean().session(session);
+        }, previousYearProjection).lean().session(session);
         lap('reads');
 
         if (!previousFinancialYear) {
@@ -47,7 +49,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         // Fetch all the FY including and after the transaction date, sorted chronologically
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
-        }, yearProjection).sort({ startDate: 1 }).lean().session(session);
+        }, yearDates).sort({ startDate: 1 }).lean().session(session);
         lap('reads');
         const now = new Date();
 
