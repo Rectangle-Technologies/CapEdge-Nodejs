@@ -13,6 +13,10 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
     let mark = startedAt;
     const lap = (bucket) => { const now = Date.now(); spent[bucket] += now - mark; mark = now; };
     let yearsRebuilt = 0;
+    // Each year holds the snapshots of EVERY demat (about 0.5 MB in total); a rebuild only needs this demat's
+    // own snapshot, so only that part of the report is read from the database
+    const dematKey = String(dematAccountId);
+    const yearProjection = { startDate: 1, endDate: 1, [`reports.${dematKey}`]: 1 };
     try {
         // Fetch the previous financial year
         const previousTransactionDate = new Date(transactionDate);
@@ -20,7 +24,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         const previousFinancialYear = await FinancialYear.findOne({
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
-        }).session(session);
+        }, yearProjection).session(session);
         lap('reads');
 
         if (!previousFinancialYear) {
@@ -32,14 +36,14 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             throw error;
         }
 
-        var previousHoldings = previousFinancialYear.reports.get(dematAccountId)?.holdings || [];
-        var previousClosingBalance = previousFinancialYear.reports.get(dematAccountId)?.closingBalance || 0;
+        var previousHoldings = previousFinancialYear.reports.get(dematKey)?.holdings || [];
+        var previousClosingBalance = previousFinancialYear.reports.get(dematKey)?.closingBalance || 0;
         var latestFY;
 
         // Fetch all the FY including and after the transaction date, sorted chronologically
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
-        }).sort({ startDate: 1 }).session(session);
+        }, yearProjection).sort({ startDate: 1 }).session(session);
         lap('reads');
 
         for (let financialYear of financialYearsToUpdate) {
@@ -139,7 +143,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             }
 
             // Update the report for the financial year
-            financialYear.reports.set(dematAccountId.toString(), {
+            financialYear.reports.set(dematKey, {
                 holdings,
                 openingBalance,
                 closingBalance
