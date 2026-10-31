@@ -51,7 +51,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         lap('reads');
         const now = new Date();
 
-        for (let financialYear of financialYearsToUpdate) {
+        for (const [yearIndex, financialYear] of financialYearsToUpdate.entries()) {
             yearsRebuilt++;
             // Fetch transactions for the FY
             const fyTransactions = await Transaction.find({
@@ -156,15 +156,18 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             previousHoldings = holdings;
             previousClosingBalance = closingBalance;
 
-            // Update the report for the financial year (only this demat's snapshot is touched).
+            // Update the report for the financial year (only this demat's snapshot is touched). The newest year
+            // keeps no snapshots (they are cleared below once the holdings are re-inserted), so it is not written.
             // The update is awaited before the next year changes `holdings` in place: the driver serialises the
             // object when it is called, so each year stores its own state. Do not pipeline or batch these updates
             // without copying `holdings` first.
-            await FinancialYear.collection.updateOne(
-                { _id: financialYear._id },
-                { $set: { [`reports.${dematKey}`]: { holdings, openingBalance, closingBalance, _id: new ObjectId() }, updatedAt: new Date() } },
-                { session }
-            );
+            if (yearIndex < financialYearsToUpdate.length - 1) {
+                await FinancialYear.collection.updateOne(
+                    { _id: financialYear._id },
+                    { $set: { [`reports.${dematKey}`]: { holdings, openingBalance, closingBalance, _id: new ObjectId() }, updatedAt: new Date() } },
+                    { session }
+                );
+            }
             lap('yearSaves');
         }
 
