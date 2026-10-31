@@ -51,14 +51,43 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         lap('reads');
         const now = new Date();
 
+        // The trades and ledger entries of all the years are read in one query each (a query per year cost a
+        // round trip each, and the ledger has no index for it) and handed out per year below
+        const tradesByYear = new Map();
+        const ledgerByYear = new Map();
+        if (financialYearsToUpdate.length > 0) {
+            // grouped in the order the database returns them: the same-date order of the per-year queries is kept
+            const trades = await Transaction.find({
+                dematAccountId: dematAccountId,
+                financialYearId: { $in: financialYearsToUpdate.map(y => y._id) }
+            }).sort({ date: 1 }).lean().session(session);
+            for (const trade of trades) {
+                const key = String(trade.financialYearId);
+                if (!tradesByYear.has(key)) tradesByYear.set(key, []);
+                tradesByYear.get(key).push(trade);
+            }
+
+            // the years are consecutive and sorted, so one pass over the date-sorted entries hands each to its year;
+            // an entry that falls in no year (a gap between years) is left out, as the per-year date filter did
+            const ledger = await LedgerEntry.find({
+                dematAccountId: dematAccountId,
+                date: { $gte: financialYearsToUpdate[0].startDate, $lte: financialYearsToUpdate[financialYearsToUpdate.length - 1].endDate }
+            }).sort({ date: 1, createdAt: 1, _id: 1 }).lean().session(session);
+            let yearIdx = 0;
+            for (const entry of ledger) {
+                while (yearIdx < financialYearsToUpdate.length && entry.date > financialYearsToUpdate[yearIdx].endDate) yearIdx++;
+                if (yearIdx === financialYearsToUpdate.length) break;
+                if (entry.date < financialYearsToUpdate[yearIdx].startDate) continue;
+                const key = String(financialYearsToUpdate[yearIdx]._id);
+                if (!ledgerByYear.has(key)) ledgerByYear.set(key, []);
+                ledgerByYear.get(key).push(entry);
+            }
+            lap('reads');
+        }
+
         for (const [yearIndex, financialYear] of financialYearsToUpdate.entries()) {
             yearsRebuilt++;
-            // Fetch transactions for the FY
-            const fyTransactions = await Transaction.find({
-                dematAccountId: dematAccountId,
-                financialYearId: financialYear._id
-            }).sort({ date: 1 }).session(session);
-            lap('reads');
+            const fyTransactions = tradesByYear.get(String(financialYear._id)) || [];
 
             // Update the opening balance of the FY
             let openingBalance = previousClosingBalance || 0;
@@ -123,11 +152,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 }
             }
 
-            const ledgerEntries = await LedgerEntry.find({
-                dematAccountId: dematAccountId,
-                date: { $gte: financialYear.startDate, $lte: financialYear.endDate }
-            }).sort({ date: 1, createdAt: 1, _id: 1 }).session(session);
-            lap('reads');
+            const ledgerEntries = ledgerByYear.get(String(financialYear._id)) || [];
 
             // Compute running balance for every entry (trade-linked or not) and
             // collect bulk updates. Each ledger entry — including those auto-
