@@ -177,6 +177,11 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 lap('ledgerWrites');
             }
 
+            // Mongoose validated the balances when the year was saved; the direct update below does not
+            if (!Number.isFinite(openingBalance) || !Number.isFinite(closingBalance)) {
+                throw new Error(`[updateRecords] non-numeric balance for demat ${dematKey} in financial year ${financialYear._id}: opening=${openingBalance} closing=${closingBalance}`);
+            }
+
             latestFY = financialYear;
             previousHoldings = holdings;
             previousClosingBalance = closingBalance;
@@ -209,13 +214,19 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             financialYearId: latestFY._id
         }));
         const currentRows = await Holdings.find({ dematAccountId }).lean().session(session);
-        const currentByTransaction = new Map(currentRows.map(row => [String(row.transactionId), row]));
+        const currentByTransaction = new Map();
+        const duplicateRowIds = []; // a second row for one transactionId (the unique index forbids it): removed, as the old delete-all did
+        for (const row of currentRows) {
+            const key = String(row.transactionId);
+            if (currentByTransaction.has(key)) duplicateRowIds.push(row._id);
+            else currentByTransaction.set(key, row);
+        }
         const holdingsOps = [];
         const wantedTransactions = new Set();
         for (const wanted of holdingsToWrite) {
             const key = String(wanted.transactionId);
+            const row = wantedTransactions.has(key) ? null : currentByTransaction.get(key); // a repeated transactionId is inserted so the unique index rejects it, as before
             wantedTransactions.add(key);
-            const row = currentByTransaction.get(key);
             if (!row) {
                 holdingsOps.push({ insertOne: { document: wanted } });
             } else if (
@@ -227,7 +238,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 holdingsOps.push({ updateOne: { filter: { _id: row._id }, update: { $set: { ...wanted, transactionCost: 0 } } } });
             }
         }
-        const staleRowIds = currentRows.filter(row => !wantedTransactions.has(String(row.transactionId))).map(row => row._id);
+        const staleRowIds = currentRows.filter(row => !wantedTransactions.has(String(row.transactionId))).map(row => row._id).concat(duplicateRowIds);
         if (staleRowIds.length > 0) holdingsOps.unshift({ deleteMany: { filter: { _id: { $in: staleRowIds } } } });
 
         // Update closing balance in demat account in DB
