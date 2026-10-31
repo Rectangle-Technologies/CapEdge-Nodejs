@@ -196,14 +196,11 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             lap('yearSaves');
         }
 
-        // Delete holdings with matching dematAccountId from DB
-        await Holdings.deleteMany({
-            dematAccountId
-        }).session(session);
-
-        // Re-insert updated holdings into the Holdings collection
-        const holdingsToInsert = previousHoldings.map(h => ({
-            buyDate: h.buyDate, // → UTC midnight via Holdings model setter (insertMany)
+        // Bring the demat's rows in the Holdings collection to the rebuilt holdings. Only the rows that differ are
+        // written (a rebuild usually changes none or a few of the hundreds): rows are matched by transactionId, which
+        // is unique, and a row that already matches is left as it is.
+        const holdingsToWrite = previousHoldings.map(h => ({
+            buyDate: h.buyDate, // → UTC midnight via Holdings model setter
             quantity: h.quantity,
             price: h.price,
             securityId: h.securityId,
@@ -211,6 +208,27 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             dematAccountId: h.dematAccountId,
             financialYearId: latestFY._id
         }));
+        const currentRows = await Holdings.find({ dematAccountId }).lean().session(session);
+        const currentByTransaction = new Map(currentRows.map(row => [String(row.transactionId), row]));
+        const holdingsOps = [];
+        const wantedTransactions = new Set();
+        for (const wanted of holdingsToWrite) {
+            const key = String(wanted.transactionId);
+            wantedTransactions.add(key);
+            const row = currentByTransaction.get(key);
+            if (!row) {
+                holdingsOps.push({ insertOne: { document: wanted } });
+            } else if (
+                +row.buyDate !== +toUTCDateOnly(wanted.buyDate) || row.quantity !== wanted.quantity || row.price !== wanted.price ||
+                String(row.securityId) !== String(wanted.securityId) || String(row.dematAccountId) !== String(wanted.dematAccountId) ||
+                String(row.financialYearId) !== String(wanted.financialYearId) || (row.transactionCost || 0) !== 0
+            ) {
+                // a row inserted without a cost has transactionCost 0 (the schema default), so a rewritten row gets 0 as well
+                holdingsOps.push({ updateOne: { filter: { _id: row._id }, update: { $set: { ...wanted, transactionCost: 0 } } } });
+            }
+        }
+        const staleRowIds = currentRows.filter(row => !wantedTransactions.has(String(row.transactionId))).map(row => row._id);
+        if (staleRowIds.length > 0) holdingsOps.unshift({ deleteMany: { filter: { _id: { $in: staleRowIds } } } });
 
         // Update closing balance in demat account in DB
         await DematAccount.updateOne(
@@ -219,7 +237,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             { session }
         );
 
-        await Holdings.insertMany(holdingsToInsert, { session });
+        if (holdingsOps.length > 0) await Holdings.bulkWrite(holdingsOps, { session });
 
         // Clear reports map to free memory
         await FinancialYear.collection.updateOne(
