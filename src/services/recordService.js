@@ -4,6 +4,8 @@ const Transaction = require("../models/Transaction");
 const DematAccount = require("../models/DematAccount");
 const LedgerEntry = require("../models/LedgerEntry");
 const Security = require("../models/Security");
+const { Types: { ObjectId } } = require("mongoose");
+const { toUTCDateOnly } = require("../utils/dateOnly");
 
 const updateRecords = async (transactionDate, dematAccountId, session) => {
     // Timing only (logged once in `finally`): where a slow rebuild spends its time. Each lap() adds the time since
@@ -13,6 +15,12 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
     let mark = startedAt;
     const lap = (bucket) => { const now = Date.now(); spent[bucket] += now - mark; mark = now; };
     let yearsRebuilt = 0;
+    // Each year holds the snapshots of EVERY demat (about 0.5 MB in total); a rebuild only needs this demat's
+    // own snapshot, so only that part of the report is read from the database. The years are read as plain
+    // objects and this demat's snapshot is written back with a direct update: building and saving Mongoose
+    // documents holding ~900 holdings per year was the bulk of the rebuild time.
+    const dematKey = String(dematAccountId);
+    const yearProjection = { startDate: 1, endDate: 1, [`reports.${dematKey}`]: 1 };
     try {
         // Fetch the previous financial year
         const previousTransactionDate = new Date(transactionDate);
@@ -20,7 +28,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
         const previousFinancialYear = await FinancialYear.findOne({
             startDate: { $lte: previousTransactionDate },
             endDate: { $gte: previousTransactionDate }
-        }).session(session);
+        }, yearProjection).lean().session(session);
         lap('reads');
 
         if (!previousFinancialYear) {
@@ -32,24 +40,54 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             throw error;
         }
 
-        var previousHoldings = previousFinancialYear.reports.get(dematAccountId)?.holdings || [];
-        var previousClosingBalance = previousFinancialYear.reports.get(dematAccountId)?.closingBalance || 0;
+        var previousHoldings = previousFinancialYear.reports?.[dematKey]?.holdings || [];
+        var previousClosingBalance = previousFinancialYear.reports?.[dematKey]?.closingBalance || 0;
         var latestFY;
 
         // Fetch all the FY including and after the transaction date, sorted chronologically
         const financialYearsToUpdate = await FinancialYear.find({
             endDate: { $gte: transactionDate }
-        }).sort({ startDate: 1 }).session(session);
+        }, yearProjection).sort({ startDate: 1 }).lean().session(session);
         lap('reads');
+        const now = new Date();
 
-        for (let financialYear of financialYearsToUpdate) {
-            yearsRebuilt++;
-            // Fetch transactions for the FY
-            const fyTransactions = await Transaction.find({
+        // The trades and ledger entries of all the years are read in one query each (a query per year cost a
+        // round trip each, and the ledger has no index for it) and handed out per year below
+        const tradesByYear = new Map();
+        const ledgerByYear = new Map();
+        if (financialYearsToUpdate.length > 0) {
+            // grouped in the order the database returns them: the same-date order of the per-year queries is kept
+            const trades = await Transaction.find({
                 dematAccountId: dematAccountId,
-                financialYearId: financialYear._id
-            }).sort({ date: 1 }).session(session);
+                financialYearId: { $in: financialYearsToUpdate.map(y => y._id) }
+            }).sort({ date: 1 }).lean().session(session);
+            for (const trade of trades) {
+                const key = String(trade.financialYearId);
+                if (!tradesByYear.has(key)) tradesByYear.set(key, []);
+                tradesByYear.get(key).push(trade);
+            }
+
+            // the years are consecutive and sorted, so one pass over the date-sorted entries hands each to its year;
+            // an entry that falls in no year (a gap between years) is left out, as the per-year date filter did
+            const ledger = await LedgerEntry.find({
+                dematAccountId: dematAccountId,
+                date: { $gte: financialYearsToUpdate[0].startDate, $lte: financialYearsToUpdate[financialYearsToUpdate.length - 1].endDate }
+            }).sort({ date: 1, createdAt: 1, _id: 1 }).lean().session(session);
+            let yearIdx = 0;
+            for (const entry of ledger) {
+                while (yearIdx < financialYearsToUpdate.length && entry.date > financialYearsToUpdate[yearIdx].endDate) yearIdx++;
+                if (yearIdx === financialYearsToUpdate.length) break;
+                if (entry.date < financialYearsToUpdate[yearIdx].startDate) continue;
+                const key = String(financialYearsToUpdate[yearIdx]._id);
+                if (!ledgerByYear.has(key)) ledgerByYear.set(key, []);
+                ledgerByYear.get(key).push(entry);
+            }
             lap('reads');
+        }
+
+        for (const [yearIndex, financialYear] of financialYearsToUpdate.entries()) {
+            yearsRebuilt++;
+            const fyTransactions = tradesByYear.get(String(financialYear._id)) || [];
 
             // Update the opening balance of the FY
             let openingBalance = previousClosingBalance || 0;
@@ -63,15 +101,20 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             for (let fyTransaction of fyTransactions) {
                 if (fyTransaction.type === 'BUY') {
                     if (fyTransaction.deliveryType === 'Delivery') {
+                        // plain object stored as is: the id, timestamps and date normalisation a Mongoose sub-document
+                        // would have added are set here (the id is generated once, here, and travels with the holding)
                         holdings.push({
-                            buyDate: fyTransaction.date, // → UTC midnight via Holdings model setter
+                            _id: new ObjectId(),
+                            buyDate: toUTCDateOnly(fyTransaction.date),
                             quantity: fyTransaction.quantity,
                             price: fyTransaction.price,
                             transactionCost: fyTransaction.transactionCost || 0,
                             securityId: fyTransaction.securityId,
                             transactionId: fyTransaction._id,
                             dematAccountId: fyTransaction.dematAccountId,
-                            financialYearId: financialYear._id
+                            financialYearId: financialYear._id,
+                            createdAt: now,
+                            updatedAt: now
                         });
                     }
                 } else if (fyTransaction.type === 'SELL') {
@@ -109,11 +152,7 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 }
             }
 
-            const ledgerEntries = await LedgerEntry.find({
-                dematAccountId: dematAccountId,
-                date: { $gte: financialYear.startDate, $lte: financialYear.endDate }
-            }).sort({ date: 1, createdAt: 1, _id: 1 }).session(session);
-            lap('reads');
+            const ledgerEntries = ledgerByYear.get(String(financialYear._id)) || [];
 
             // Compute running balance for every entry (trade-linked or not) and
             // collect bulk updates. Each ledger entry — including those auto-
@@ -138,28 +177,35 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
                 lap('ledgerWrites');
             }
 
-            // Update the report for the financial year
-            financialYear.reports.set(dematAccountId.toString(), {
-                holdings,
-                openingBalance,
-                closingBalance
-            });
+            // Mongoose validated the balances when the year was saved; the direct update below does not
+            if (!Number.isFinite(openingBalance) || !Number.isFinite(closingBalance)) {
+                throw new Error(`[updateRecords] non-numeric balance for demat ${dematKey} in financial year ${financialYear._id}: opening=${openingBalance} closing=${closingBalance}`);
+            }
 
             latestFY = financialYear;
             previousHoldings = holdings;
             previousClosingBalance = closingBalance;
-            await financialYear.save({ session });
+
+            // Update the report for the financial year (only this demat's snapshot is touched). The newest year
+            // keeps no snapshots (they are cleared below once the holdings are re-inserted), so it is not written.
+            // The update is awaited before the next year changes `holdings` in place: the driver serialises the
+            // object when it is called, so each year stores its own state. Do not pipeline or batch these updates
+            // without copying `holdings` first.
+            if (yearIndex < financialYearsToUpdate.length - 1) {
+                await FinancialYear.collection.updateOne(
+                    { _id: financialYear._id },
+                    { $set: { [`reports.${dematKey}`]: { holdings, openingBalance, closingBalance, _id: new ObjectId() }, updatedAt: new Date() } },
+                    { session }
+                );
+            }
             lap('yearSaves');
         }
 
-        // Delete holdings with matching dematAccountId from DB
-        await Holdings.deleteMany({
-            dematAccountId
-        }).session(session);
-
-        // Re-insert updated holdings into the Holdings collection
-        const holdingsToInsert = previousHoldings.map(h => ({
-            buyDate: h.buyDate, // → UTC midnight via Holdings model setter (insertMany)
+        // Bring the demat's rows in the Holdings collection to the rebuilt holdings. Only the rows that differ are
+        // written (a rebuild usually changes none or a few of the hundreds): rows are matched by transactionId, which
+        // is unique, and a row that already matches is left as it is.
+        const holdingsToWrite = previousHoldings.map(h => ({
+            buyDate: h.buyDate, // → UTC midnight via Holdings model setter
             quantity: h.quantity,
             price: h.price,
             securityId: h.securityId,
@@ -167,6 +213,33 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             dematAccountId: h.dematAccountId,
             financialYearId: latestFY._id
         }));
+        const currentRows = await Holdings.find({ dematAccountId }).lean().session(session);
+        const currentByTransaction = new Map();
+        const duplicateRowIds = []; // a second row for one transactionId (the unique index forbids it): removed, as the old delete-all did
+        for (const row of currentRows) {
+            const key = String(row.transactionId);
+            if (currentByTransaction.has(key)) duplicateRowIds.push(row._id);
+            else currentByTransaction.set(key, row);
+        }
+        const holdingsOps = [];
+        const wantedTransactions = new Set();
+        for (const wanted of holdingsToWrite) {
+            const key = String(wanted.transactionId);
+            const row = wantedTransactions.has(key) ? null : currentByTransaction.get(key); // a repeated transactionId is inserted so the unique index rejects it, as before
+            wantedTransactions.add(key);
+            if (!row) {
+                holdingsOps.push({ insertOne: { document: wanted } });
+            } else if (
+                +row.buyDate !== +toUTCDateOnly(wanted.buyDate) || row.quantity !== wanted.quantity || row.price !== wanted.price ||
+                String(row.securityId) !== String(wanted.securityId) || String(row.dematAccountId) !== String(wanted.dematAccountId) ||
+                String(row.financialYearId) !== String(wanted.financialYearId) || (row.transactionCost || 0) !== 0
+            ) {
+                // a row inserted without a cost has transactionCost 0 (the schema default), so a rewritten row gets 0 as well
+                holdingsOps.push({ updateOne: { filter: { _id: row._id }, update: { $set: { ...wanted, transactionCost: 0 } } } });
+            }
+        }
+        const staleRowIds = currentRows.filter(row => !wantedTransactions.has(String(row.transactionId))).map(row => row._id).concat(duplicateRowIds);
+        if (staleRowIds.length > 0) holdingsOps.unshift({ deleteMany: { filter: { _id: { $in: staleRowIds } } } });
 
         // Update closing balance in demat account in DB
         await DematAccount.updateOne(
@@ -175,11 +248,14 @@ const updateRecords = async (transactionDate, dematAccountId, session) => {
             { session }
         );
 
-        await Holdings.insertMany(holdingsToInsert, { session });
+        if (holdingsOps.length > 0) await Holdings.bulkWrite(holdingsOps, { session });
 
         // Clear reports map to free memory
-        latestFY.reports = new Map();
-        await latestFY.save({ session });
+        await FinancialYear.collection.updateOne(
+            { _id: latestFY._id },
+            { $set: { reports: {}, updatedAt: new Date() } },
+            { session }
+        );
         lap('holdings');
 
     } catch (error) {
