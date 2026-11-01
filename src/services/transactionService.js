@@ -412,9 +412,10 @@ const deleteTransaction = async (transactionId) => {
 
 const editTransaction = async (transactionId, newTransactionData) => {
     return await executeTransactionWithRetry(async (session) => {
-        // Step 1: Delete the old transaction record(s), unlink its ledger entry,
-        // and recalculate holdings/balances from the old date.
-        await _deleteTransactionLogic(transactionId, session);
+        // Step 1: Delete the old transaction record(s) and unlink its ledger entry. Holdings are NOT
+        // rebuilt yet: with the old trade gone and the new one not created, a later SELL that depends
+        // on it would be refused even when the edited result is valid (editContract rebuilds once too).
+        const { date: oldDate, dematAccountId: oldDematAccountId } = await _deleteTransactionRecords(transactionId, session);
 
         // Step 2: Create the new transaction record(s) with the updated data.
         const newTxs = await createTransaction(newTransactionData, session, createLookupCache());
@@ -439,8 +440,15 @@ const editTransaction = async (transactionId, newTransactionData) => {
             }], { session });
         }
 
-        // Step 4: Recalculate holdings and balances from the new transaction date.
-        await updateRecords(newTxs[0].date, newTxs[0].dematAccountId, session);
+        // Step 4: Recalculate holdings and balances once, from the earlier of the old and the new date.
+        // If the trade moved to another demat account, the old account is rebuilt from the old date.
+        const { date: newDate, dematAccountId: newDematAccountId } = newTxs[0];
+        if (String(oldDematAccountId) !== String(newDematAccountId)) {
+            await updateRecords(oldDate, oldDematAccountId, session);
+            await updateRecords(newDate, newDematAccountId, session);
+        } else {
+            await updateRecords(oldDate < newDate ? oldDate : newDate, newDematAccountId, session);
+        }
         return newTxs;
     });
 };
